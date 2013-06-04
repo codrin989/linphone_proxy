@@ -15,6 +15,10 @@ int
 main(int argc, char *argv[]) {
 	int rc;
 
+	KICK(argc < 2, "incorrect usage\n"
+	"Usage:\n"
+	"./linphone_proxy <remote_ip>\n");
+
 	puts("Linphone proxy started...");
 
 	rc = init(
@@ -39,7 +43,8 @@ main(int argc, char *argv[]) {
 			proxy_to_linphone_socket,
 			proxy_to_proxy_data_socket,
 			proxy_to_linphone_data_socket,
-			configure_socket
+			configure_socket,
+			argv[1]
 			);
 	if (rc == 0)
 		printf("Proxy finished ok...\n");

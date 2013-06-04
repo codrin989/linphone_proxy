@@ -51,8 +51,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	rc = bind_socket(
 			*proxy_to_proxy_socket,
 			AF_INET,
-			port,
-			inet_addr("127.0.0.1"));
+			port);
 	if (rc < 0)
 		exit_error("cannot bind proxy-to-proxy socket", EXIT_FAILURE);
 	proxy_to_proxy_port = port;
@@ -69,8 +68,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 		rc = bind_socket(
 			*proxy_to_linphone_socket,
 			AF_INET,
-			port + i,
-			inet_addr(CALLER_IP));
+			port + i);
 	}
 	if (rc < 0)
 		exit_error("cannot bind proxy-to-linphone socket", EXIT_FAILURE);
@@ -86,8 +84,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	rc = bind_socket(
 			*proxy_to_proxy_data_socket,
 			AF_INET,
-			port,
-			inet_addr("127.0.0.1"));
+			port);
 	if (rc < 0)
 		exit_error("cannot bind proxy-to-proxy data socket", EXIT_FAILURE);
 	proxy_to_proxy_data_port = port;
@@ -104,8 +101,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 		rc = bind_socket(
 				*proxy_to_linphone_data_socket,
 				AF_INET,
-				port + i,
-				inet_addr(CALLER_IP));
+				port + i);
 	}
 	if (rc < 0)
 		exit_error("cannot bind proxy-to-linphone data socket", EXIT_FAILURE);
@@ -115,7 +111,10 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	configure_port = CONFIGURE_PORT;
 	if (*configure_socket < 0)
 		exit_error("cannot create configure socket", EXIT_FAILURE);
-	rc = bind_socket(*configure_socket, AF_INET, configure_port, inet_addr("127.0.0.1"));
+	rc = bind_socket(
+			*configure_socket,
+			AF_INET,
+			configure_port);
 	if (rc < 0)
 		exit_error("cannot bind configure socket", EXIT_FAILURE);
 
@@ -135,6 +134,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	}
 #endif
 
+#if 0
 	/* add preroute rule for packets that initate a call - local linphone */
 	i = add_iptables_rule('A', "OUTPUT","lo", 1, SIP_UDP_PORT, proxy_to_linphone_port);
 	if (i == -1) {
@@ -142,6 +142,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket);
 		exit_error("could not add the iptables rule", EXIT_FAILURE);
 	}
+#endif
 
 #if 0
 	/* add preroute rule for incoming data packets - remember to delete at the end */
@@ -153,6 +154,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	}
 #endif
 
+#if 0
 	/* add preroute rule for packets that send data packets - local linphone */
 	i = add_iptables_rule('A', "OUTPUT","lo", 1, SIP_DATA_PORT, proxy_to_linphone_data_port);
 	if (i == -1) {
@@ -160,7 +162,7 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket);
 		exit_error("could not add the iptables rule", EXIT_FAILURE);
 	}
-
+#endif
 
 	return 0;
 }
@@ -203,12 +205,14 @@ release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_pr
 	}
 #endif
 
+#if 0
 	if (proxy_to_linphone_port != -1) {
 		rc = add_iptables_rule('D', "OUTPUT","lo", 1, SIP_UDP_PORT, proxy_to_linphone_port);
 		if (rc == -1)
 			printf ("could not delete rule from iptables\n");
 		proxy_to_linphone_port = -1;
 	}
+#endif
 
 #if 0
 	if (proxy_to_proxy_data_port != -1) {
@@ -219,12 +223,13 @@ release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_pr
 	}
 #endif
 
+#if 0
 	if (proxy_to_linphone_data_port != -1) {
 		rc = add_iptables_rule('D', "OUTPUT","lo", 1, SIP_DATA_PORT, proxy_to_linphone_data_port);
 		if (rc == -1)
 			printf ("could not delete rule from iptables\n");
 		proxy_to_linphone_data_port = -1;
 	}
-
+#endif
 
 }

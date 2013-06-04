@@ -20,6 +20,7 @@ run_proxy(
 		int proxy_to_linphone_socket,
 		int proxy_to_proxy_data_socket,
 		int proxy_to_linphone_data_socket,
-		int configure_socketfd);
+		int configure_socketfd,
+		char *remote_ip);
 
 #endif /* RUN_PROXY_H_ */

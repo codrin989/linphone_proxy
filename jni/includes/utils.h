@@ -36,4 +36,14 @@ exit_error (const char * msg, int exit_code);
 inline int
 return_error (const char * msg, int return_code);
 
+#define KICK(assertion, call_description) \
+	do { \
+		if (assertion) { \
+			fprintf(stderr, "(%s, %d): ", \
+					__FILE__, __LINE__); \
+			fprintf(stderr, "%s\n", call_description); \
+			exit(EXIT_FAILURE); \
+		} \
+	} while(0)
+
 #endif /* UTILS_H_ */

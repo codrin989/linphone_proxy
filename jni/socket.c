@@ -21,7 +21,7 @@ create_socket(int domain, int type) {
 }
 
 int
-bind_socket(int sockfd, int domain, int portno, unsigned int source_address) {
+bind_socket(int sockfd, int domain, int portno) {
 	struct sockaddr_in serv_addr;
 	int rc;
 

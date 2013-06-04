@@ -22,7 +22,7 @@ void
 destroy_socket(int sockfd);
 
 int
-bind_socket(int sockfd, int domain, int portno, unsigned int source_address);
+bind_socket(int sockfd, int domain, int portno);
 
 int
 listen_socket(int sockfd);

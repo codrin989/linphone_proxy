@@ -16,7 +16,8 @@ run_proxy(
 		int proxy_to_linphone_socket,
 		int proxy_to_proxy_data_socket,
 		int proxy_to_linphone_data_socket,
-		int configure_socket)
+		int configure_socket,
+		char *remote_ip)
 {
 	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", proxy_to_proxy_port, proxy_to_proxy_data_port);
 	int rc, num_fds = LISTENING_SOCKETS, i;
@@ -30,7 +31,7 @@ run_proxy(
 	proxy_to_proxy_len = sizeof(proxy_to_proxy_sock);
 	memset(&proxy_to_proxy_sock, 0, sizeof(proxy_to_proxy_sock));
 	proxy_to_proxy_sock.sin_family = AF_INET;
-	proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(CALLER_IP);
+	proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(remote_ip);
 	proxy_to_proxy_sock.sin_port = htons(proxy_to_proxy_port);
 
 	/* init receiver socket */
@@ -44,7 +45,7 @@ run_proxy(
 	proxy_to_proxy_data_len = sizeof(proxy_to_proxy_data_sock);
 	memset(&proxy_to_proxy_data_sock, 0, sizeof(proxy_to_proxy_data_sock));
 	proxy_to_proxy_data_sock.sin_family = AF_INET;
-	proxy_to_proxy_data_sock.sin_addr.s_addr = inet_addr(CALLER_IP);
+	proxy_to_proxy_data_sock.sin_addr.s_addr = inet_addr(remote_ip);
 	proxy_to_proxy_data_sock.sin_port = htons(proxy_to_proxy_data_port);
 
 	/* init receiver data socket */
@@ -115,13 +116,13 @@ run_proxy(
 						printf("CALL: no message received on proxy-to-proxy port\n");
 					}
 					else {
-						printf("CALL: received packet from proxy with source port %d on proxy port with %d bytes\n", ntohs(proxy_to_proxy_sock.sin_port), rc);
+						printf("CALL: from [REMOTE: %d] - %d bytes\n", ntohs(proxy_to_proxy_sock.sin_port), rc);
 						//getchar();
 						if (sendto(proxy_to_linphone_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_linphone_sock, sizeof(proxy_to_linphone_sock)) != rc) {
 							perror("CALL: Cannot forward message to linphone application\n");
 						}
 						else {
-							printf("CALL: message sent to localhost linphone, size %d bytes\n", rc);
+							printf("CALL: sent [LINPHONE] - %d bytes\n", rc);
 							//getchar();
 							memset(buff, 0, MAX_PACKET_SIZE);
 						}
@@ -131,13 +132,13 @@ run_proxy(
 						perror("CALL: no message received on forwarding port\n");
 					}
 					else {
-						printf("CALL: linphone answered with source port %d, on proxy-linphone, packet with %d bytes\n", htons(proxy_to_linphone_sock.sin_port), rc);
+						printf("CALL: from [LINPHONE: %d] - %d bytes\n", htons(proxy_to_linphone_sock.sin_port), rc);
 						//getchar();
 						if (sendto(proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_proxy_sock, sizeof(proxy_to_proxy_sock)) != rc) {
 							perror("CALL: Cannot send linphone message back\n");
 						}
 						else {
-							printf("CALL: Sent packet to external proxy with size %d bytes\n", rc);
+							printf("CALL: sent [REMOTE] - %d bytes\n", rc);
 							memset(buff, 0, MAX_PACKET_SIZE);
 						}
 					}
@@ -191,7 +192,9 @@ run_proxy(
 						}
 					}
 				}
+				printf("\n");
 				fds[i].revents = 0;
+				//getchar();
 			}
 
 		}
