@@ -18,7 +18,8 @@ init(
 		int *proxy_to_linphone_socket,
 		int *proxy_to_proxy_data_socket,
 		int *proxy_to_linphone_data_socket,
-		int *configure_socket
+		int *configure_socket,
+		char *remote_ip
 		);
 
 void
@@ -26,7 +27,8 @@ release(int proxy_to_proxy_socket,
 		int proxy_to_linphone_socket,
 		int proxy_to_proxy_data_socket,
 		int proxy_to_linphone_data_socket,
-		int configure_socket
+		int configure_socket,
+		char *remote_ip
 		);
 
 #endif /* INIT_H_ */

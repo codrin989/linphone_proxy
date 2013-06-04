@@ -8,8 +8,8 @@
 
 int proxy_to_proxy_port, proxy_to_linphone_port, proxy_to_proxy_data_port, proxy_to_linphone_data_port, configure_port;
 
-int
-add_iptables_rule(const char operation, const char * type, const char * intf, int negate_interface, int dest_port, int red_to_port) {
+static int
+add_iptables_rule(const char operation, const char * type, const char * intf, int negate_interface, char * target_ip, int dest_port, int red_to_port) {
 	char buff[MAX_LEN];
 	int rc = -1;
 
@@ -20,7 +20,7 @@ add_iptables_rule(const char operation, const char * type, const char * intf, in
 			sprintf(buff, "iptables -t nat -%c %s -i %s -p udp --dport %d -j REDIRECT --to-port %d", operation, type, intf, dest_port, red_to_port);
 	}
 	else if (strcmp (type, "OUTPUT") == 0) {
-		sprintf(buff, "iptables -t nat -%c %s -p udp -d %s --sport %d --dport %d -j DNAT --to 127.0.0.1:%d", operation, type, CALLER_IP, dest_port, dest_port, red_to_port);
+		sprintf(buff, "iptables -t nat -%c %s -p udp -d %s --sport %d --dport %d -j DNAT --to 127.0.0.1:%d", operation, type, target_ip, dest_port, dest_port, red_to_port);
 
 	}
 
@@ -28,18 +28,20 @@ add_iptables_rule(const char operation, const char * type, const char * intf, in
 	if (rc == -1)
 		return_error(buff, rc);
 
+#if 0
 	if (strcmp (type, "OUTPUT") == 0) {
 		sprintf(buff, "iptables -t nat -%c POSTROUTING -p udp -d %s --sport %d --dport %d -j SNAT --to-source 192.168.1.148:%d", operation, CALLER_IP, red_to_port, dest_port, dest_port );
 	}
 	rc = system(buff);
 	if (rc == -1)
 		return_error(buff, rc);
+#endif
 
 	return rc;
 }
 
 int
-init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_proxy_data_socket, int *proxy_to_linphone_data_socket, int *configure_socket) {
+init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_proxy_data_socket, int *proxy_to_linphone_data_socket, int *configure_socket, char *remote_ip) {
 	int port, i, rc;
 
 	/* create socket for proxy-to-proxy communication */
@@ -134,15 +136,15 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	}
 #endif
 
-#if 0
-	/* add preroute rule for packets that initate a call - local linphone */
-	i = add_iptables_rule('A', "OUTPUT","lo", 1, SIP_UDP_PORT, proxy_to_linphone_port);
+
+	/* redirect control packets from linphone through proxy */
+	i = add_iptables_rule('A', "OUTPUT","lo", 1, remote_ip, SIP_UDP_PORT, proxy_to_linphone_port);
 	if (i == -1) {
 		proxy_to_linphone_port = -1; /* no need to delete the iptable rule; dele the one before */
-		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket);
+		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket, remote_ip);
 		exit_error("could not add the iptables rule", EXIT_FAILURE);
 	}
-#endif
+
 
 #if 0
 	/* add preroute rule for incoming data packets - remember to delete at the end */
@@ -154,21 +156,21 @@ init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_pr
 	}
 #endif
 
-#if 0
-	/* add preroute rule for packets that send data packets - local linphone */
-	i = add_iptables_rule('A', "OUTPUT","lo", 1, SIP_DATA_PORT, proxy_to_linphone_data_port);
+
+	/* redirect data packets from linphone through proxy */
+	i = add_iptables_rule('A', "OUTPUT","lo", 1, remote_ip, SIP_DATA_PORT, proxy_to_linphone_data_port);
 	if (i == -1) {
 		proxy_to_linphone_data_port = -1; /* no need to delete the iptable rule; delete the one before */
-		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket);
+		release(*proxy_to_proxy_socket, *proxy_to_linphone_socket, *proxy_to_proxy_data_socket, *proxy_to_linphone_data_socket, *configure_socket, remote_ip);
 		exit_error("could not add the iptables rule", EXIT_FAILURE);
 	}
-#endif
+
 
 	return 0;
 }
 
 void
-release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_proxy_data_socket, int proxy_to_linphone_data_socket, int configure_socket) {
+release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_proxy_data_socket, int proxy_to_linphone_data_socket, int configure_socket, char *remote_ip) {
 	int rc;
 
 	if (proxy_to_proxy_socket < 0) {
@@ -205,14 +207,14 @@ release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_pr
 	}
 #endif
 
-#if 0
+
 	if (proxy_to_linphone_port != -1) {
-		rc = add_iptables_rule('D', "OUTPUT","lo", 1, SIP_UDP_PORT, proxy_to_linphone_port);
+		rc = add_iptables_rule('D', "OUTPUT","lo", 1, remote_ip, SIP_UDP_PORT, proxy_to_linphone_port);
 		if (rc == -1)
 			printf ("could not delete rule from iptables\n");
 		proxy_to_linphone_port = -1;
 	}
-#endif
+
 
 #if 0
 	if (proxy_to_proxy_data_port != -1) {
@@ -223,13 +225,11 @@ release(int proxy_to_proxy_socket, int proxy_to_linphone_socket, int proxy_to_pr
 	}
 #endif
 
-#if 0
 	if (proxy_to_linphone_data_port != -1) {
-		rc = add_iptables_rule('D', "OUTPUT","lo", 1, SIP_DATA_PORT, proxy_to_linphone_data_port);
+		rc = add_iptables_rule('D', "OUTPUT","lo", 1, remote_ip, SIP_DATA_PORT, proxy_to_linphone_data_port);
 		if (rc == -1)
 			printf ("could not delete rule from iptables\n");
 		proxy_to_linphone_data_port = -1;
 	}
-#endif
 
 }

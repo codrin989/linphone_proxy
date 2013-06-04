@@ -26,7 +26,8 @@ main(int argc, char *argv[]) {
 			&proxy_to_linphone_socket,
 			&proxy_to_proxy_data_socket,
 			&proxy_to_linphone_data_socket,
-			&configure_socket
+			&configure_socket,
+			argv[1]
 			);
 	if (rc < 0)
 		exit_error("failed to initialize proxy\n", EXIT_FAILURE);
@@ -53,7 +54,8 @@ main(int argc, char *argv[]) {
 			proxy_to_linphone_socket,
 			proxy_to_proxy_data_socket,
 			proxy_to_linphone_data_socket,
-			configure_socket
+			configure_socket,
+			argv[1]
 			);
 
 	return EXIT_SUCCESS;
