@@ -147,14 +147,14 @@ run_proxy(
 						printf ("DATA: no message received on listening data port\n");
 					}
 					else {
-						printf ("DATA: received data packet with source port %d on listening port with %d bytes\n", ntohs(proxy_to_proxy_data_sock.sin_port), rc);
+						printf ("DATA: from [REMOTE: %d] - %d bytes\n", ntohs(proxy_to_proxy_data_sock.sin_port), rc);
 						//getchar();
 						fds[i].revents = 0;
 						if (sendto(proxy_to_linphone_data_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_linphone_data_sock, sizeof(proxy_to_linphone_data_sock)) != rc) {
 							perror("DATA: Cannot forward data packet to linphone application\n");
 						}
 						else {
-							printf("DATA: data message sent to localhost linphone, size %d bytes\n", rc);
+							printf("DATA: sent [LINPHONE] - %d bytes\n", rc);
 							//getchar();
 							memset (buff, 0, MAX_PACKET_SIZE);
 						}
@@ -165,13 +165,13 @@ run_proxy(
 						perror("DATA: no message received on forwarding port\n");
 					}
 					else {
-						printf("DATA: linphone answered with source port %d, on forwarding port, data packet with %d bytes\n", htons(proxy_to_linphone_sock.sin_port), rc);
+						printf("DATA: from [LINPHONE: %d] - %d bytes\n", htons(proxy_to_linphone_data_sock.sin_port), rc);
 						//getchar();
 						if (sendto(proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_proxy_data_sock, sizeof(proxy_to_proxy_data_sock)) != rc) {
 							perror("DATA: Cannot forward linphone data packet\n");
 						}
 						else {
-							printf("DATA: Sent data packet to caller with size %d bytes\nDone\n", rc);
+							printf("DATA: sent [REMOTE] - %d bytes\nDone\n", rc);
 							memset (buff, 0, MAX_PACKET_SIZE);
 						}
 					}

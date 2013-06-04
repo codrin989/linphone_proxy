@@ -28,14 +28,12 @@ add_iptables_rule(const char operation, const char * type, const char * intf, in
 	if (rc == -1)
 		return_error(buff, rc);
 
-#if 0
 	if (strcmp (type, "OUTPUT") == 0) {
 		sprintf(buff, "iptables -t nat -%c POSTROUTING -p udp -d %s --sport %d --dport %d -j SNAT --to-source 192.168.1.148:%d", operation, CALLER_IP, red_to_port, dest_port, dest_port );
 	}
 	rc = system(buff);
 	if (rc == -1)
 		return_error(buff, rc);
-#endif
 
 	return rc;
 }
