@@ -9,11 +9,12 @@
 #include "run_proxy.h"
 
 typedef enum {
-	NONE = 0,
-	DATA_COPY,
-	INITIATING,
-	INTERCEPTING,
-	MIRRORING
+	NONE = 0,		/* proxy is initialized, but no packet has been received */
+	DATA_COPY,		/* proxy is getting mirrored data packets from another proxy */
+	INITIATING,		/* proxy received only SIP packets, that initiate the VoIP connection */
+	INTERCEPTING,	/* proxy received SIP packets and receives data packets, but no mirroring is done */
+	MIRRORING		/* proxy received SIP packets and receives data packets and mirroring is performed
+	 	 	 	 	 	 for external data packets */
 }state;
 
 state proxy_state;
@@ -185,7 +186,7 @@ run_proxy(
 
 							if (proxy_state == MIRRORING) {
 
-								if (sendto(proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &mirror_sock, sizeof(mirror_len)) != rc) {
+								if (sendto(proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &mirror_sock, sizeof(mirror_sock)) != rc) {
 									printf("MIRROR_DATA: Cannot forward data packet to mirror (%s)\n", mirror_ip);
 									perror("MIRRORING");
 								}
@@ -246,6 +247,7 @@ run_proxy(
 								mirror_ip = strdup(buff + strlen("mirror") + 2);/* TODO: carefull here */
 								printf ("DBG: mirrored ip is %s\n", mirror_ip);
 								/* init mirror socket */
+
 								mirror_len = sizeof(mirror_sock);
 								memset(&mirror_sock, 0, mirror_len);
 								mirror_sock.sin_family = AF_INET;
