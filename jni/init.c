@@ -9,7 +9,15 @@
 int proxy_to_proxy_port, proxy_to_linphone_port, proxy_to_proxy_data_port, proxy_to_linphone_data_port, configure_port;
 
 static int
-add_iptables_rule(const char operation, const char * type, const char * intf, int negate_interface, char * target_ip, int dest_port, int red_to_port) {
+add_iptables_rule(
+		const char operation,
+		const char * type,
+		const char * intf,
+		int negate_interface,
+		char * target_ip,
+		int dest_port,
+		int red_to_port)
+{
 	char buff[MAX_LEN];
 	int rc = -1;
 
@@ -39,7 +47,13 @@ add_iptables_rule(const char operation, const char * type, const char * intf, in
 }
 
 int
-init(int *proxy_to_proxy_socket, int *proxy_to_linphone_socket, int *proxy_to_proxy_data_socket, int *proxy_to_linphone_data_socket, int *configure_socket, char *remote_ip) {
+init(int *proxy_to_proxy_socket,
+		int *proxy_to_linphone_socket,
+		int *proxy_to_proxy_data_socket,
+		int *proxy_to_linphone_data_socket,
+		int *configure_socket,
+		char *remote_ip)
+{
 	int port, i, rc;
 
 	/* create socket for proxy-to-proxy communication */

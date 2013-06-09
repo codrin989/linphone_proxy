@@ -12,7 +12,7 @@
         android:id="@+id/textView1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/hello_world" />
+        android:text="@string/app_name" />
 
     <EditText
         android:id="@+id/textin"
@@ -25,21 +25,22 @@
         <requestFocus />
     </EditText>
 
+    <EditText
+        android:id="@+id/textout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@+id/textin"
+        android:layout_below="@+id/send"
+        android:layout_marginTop="18dp"
+        android:ems="10" />
+
     <Button
         android:id="@+id/send"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@+id/textin"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="18dp"
+        android:layout_marginTop="16dp"
         android:text="Button" />
-
-    <EditText
-        android:id="@+id/textout"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_centerVertical="true"
-        android:ems="10" />
 
 </RelativeLayout>

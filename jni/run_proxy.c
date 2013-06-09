@@ -181,15 +181,23 @@ run_proxy(
 						perror("CONFIGURE: no message received\n");
 					}
 					else {
-						printf("DATA: linphone answered with source port %d, on forwarding port, data packet with %d bytes\n", htons(proxy_to_linphone_sock.sin_port), rc);
+						printf("MGM: from [PROXY MANAGER: %d] - %d bytes\n\tMessage: %s\n", htons(manager_sock.sin_port), rc, buff);
 						//getchar();
-						if (sendto(configure_socket, "ok", 2, 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock)) != rc) {
-							perror("CONFIGURE: Cannot answer packet\n");
+
+						if (strcmp (buff, "Test") == 0)
+						{
+							strcpy (buff, "Test ok");
+						} else {
+							strcpy (buff, "unknown command");
+						}
+
+						if (sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock)) != (ssize_t)strlen(buff)) {
+							perror("CONFIGURE: Cannot answer to [PROXY MANAGER]\n");
 						}
 						else {
-							printf("CONFIGURE: Sent data packet to caller with size %d bytes\nDone\n", rc);
-							memset (buff, 0, MAX_PACKET_SIZE);
+							printf("MGM: sent [PROXY MANAGER: %s] - %d bytes\n", buff, rc);
 						}
+						memset (buff, 0, MAX_PACKET_SIZE);
 					}
 				}
 				printf("\n");

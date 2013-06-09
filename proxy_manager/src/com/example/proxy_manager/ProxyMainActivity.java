@@ -6,8 +6,11 @@ import java.net.InetAddress;
 import java.io.IOException;
 import java.net.UnknownHostException;
 
+import org.apache.http.impl.conn.tsccm.WaitingThread;
+
 import android.os.Bundle;
 import android.app.Activity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
@@ -17,7 +20,9 @@ import android.widget.TextView;
 public class ProxyMainActivity extends Activity {
 
 	EditText textOut;
-	TextView textIn;	
+	TextView textIn;
+	String output;
+	int done;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -36,41 +41,58 @@ public class ProxyMainActivity extends Activity {
 	@Override
 	public void onClick(View arg0) {
 	 // TODO Auto-generated method stub
-	 DatagramSocket socket = null;
-	 DatagramPacket in = null, out = null;
-	 byte[] inData = new byte[1522];
-	 byte[] outData = new byte[1522];
+	done = 0;
+	  new Thread (new Runnable(){
+		  public void run (){
+			  System.out.println("in thread");
+			  DatagramSocket socket = null;
+			 DatagramPacket in = null, out = null;
+			 byte[] inData = new byte[1522];
+			 byte[] outData = new byte[1522];
 
-	 try {
-	  socket = new DatagramSocket(52123);
-	  in = new DatagramPacket(inData, inData.length);
-	  //dataInputStream = new DataInputStream(socket.getInputStream());
-	  //dataOutputStream.writeUTF(textOut.getText().toString());
-	  outData = textIn.getText().toString().getBytes();
-	  System.out.println(textIn.getText().toString());
-	  out = new DatagramPacket(outData, outData.length, InetAddress.getByName("127.0.0.1"), 52124);
-	  socket.send(out);
-	  socket.receive(in);
+			 try {
+				  socket = new DatagramSocket(52123);
+				  in = new DatagramPacket(inData, inData.length);
+				  //dataInputStream = new DataInputStream(socket.getInputStream());
+				  //dataOutputStream.writeUTF(textOut.getText().toString());
+				  outData = textIn.getText().toString().getBytes();
+				  Log.d("proxy debugging", textIn.getText().toString());
+				  out = new DatagramPacket(outData, outData.length, InetAddress.getByName("127.0.0.1"), 52124);
+				  socket.send(out);
+				  Log.d("proxy debugging", "Packet sent");
+				  socket.receive(in);
+				  output = new String(in.getData()).substring(0, in.getLength());
+				  Log.d("proxy debugging", "Packet received " + output);
+				  done = 1;
+				  //textIn.setText(dataInputStream.readUTF());
+				  
+			 } catch (UnknownHostException e) {
+				  // TODO Auto-generated catch block
+				  e.printStackTrace();
+			 } catch (IOException e) {
+				  // TODO Auto-generated catch block
+				  e.printStackTrace();
+			 }
+			 finally{
+				  if (socket != null){
+					  try {
+						  socket.close();
+					   } catch (Exception e) {
+						    // TODO Auto-generated catch block
+						    e.printStackTrace();
+					   }
+				  }
+			 }
+		  }
+	  }).start();
 	  
-	  //textIn.setText(dataInputStream.readUTF());
-	  textOut.setText(in.getData().toString());
-	 } catch (UnknownHostException e) {
-	  // TODO Auto-generated catch block
-	  e.printStackTrace();
-	 } catch (IOException e) {
-	  // TODO Auto-generated catch block
-	  e.printStackTrace();
-	 }
-	 finally{
-	  if (socket != null){
-	   try {
-	    socket.close();
-	   } catch (Exception e) {
-	    // TODO Auto-generated catch block
-	    e.printStackTrace();
-	   }
-	  }
-	 }
+	  for (int i = 0; i < 10000000 && done == 0; i++);
+	  if (done == 1)
+		  textOut.setText(output);
+	  else
+		  textOut.setText("TIMEOUT !!!");
+	  
+	
 	}};
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
