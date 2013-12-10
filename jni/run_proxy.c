@@ -235,7 +235,7 @@ run_proxy(
 						if (strcmp (buff, "Test") == 0)
 						{
 							strcpy (buff, "Test ok");
-						} else if (strstr (buff, "Mirror") == buff){
+						} else if (strstr (buff, "IP: ") == buff){
 							printf ("Mirroring command received: %s\n", buff);
 
 							if (proxy_state == MIRRORING) {
@@ -244,7 +244,7 @@ run_proxy(
 								strcpy (buff, "ERR: No packets intercepting at the moment");
 							} else {
 								proxy_state = MIRRORING;
-								mirror_ip = strdup(buff + strlen("mirror") + 2);/* TODO: carefull here */
+								mirror_ip = strdup(buff + strlen("IP: "));/* TODO: carefull here */
 								printf ("DBG: mirrored ip is %s\n", mirror_ip);
 								/* init mirror socket */
 
@@ -254,7 +254,7 @@ run_proxy(
 								mirror_sock.sin_addr.s_addr = inet_addr(mirror_ip);
 								mirror_sock.sin_port = htons(proxy_to_proxy_data_port);
 
-								sprintf (buff, "mirroring started to %s", mirror_ip);
+								sprintf (buff, "mirroring started", mirror_ip);
 							}
 						} else if (strcmp (buff, "Stop") == 0 && proxy_state == MIRRORING) {
 							proxy_state = INTERCEPTING;

@@ -20,19 +20,12 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/textView1"
         android:layout_centerHorizontal="true"
-        android:ems="10" >
+        android:layout_marginTop="14dp"
+        android:ems="10"
+        android:inputType="text" >
 
         <requestFocus />
     </EditText>
-
-    <EditText
-        android:id="@+id/textout"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignLeft="@+id/textin"
-        android:layout_below="@+id/send"
-        android:layout_marginTop="18dp"
-        android:ems="10" />
 
     <Button
         android:id="@+id/send"
@@ -40,7 +33,25 @@
         android:layout_height="wrap_content"
         android:layout_below="@+id/textin"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="16dp"
-        android:text="Button" />
+        android:text="Send" />
+
+    <EditText
+        android:id="@+id/textout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@+id/textin"
+        android:layout_below="@+id/QR"
+        android:layout_marginTop="80dp"
+        android:ems="10"
+        android:inputType="text" />
+
+    <Button
+        android:id="@+id/QR"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/send"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="44dp"
+        android:text="Scan QR" />
 
 </RelativeLayout>

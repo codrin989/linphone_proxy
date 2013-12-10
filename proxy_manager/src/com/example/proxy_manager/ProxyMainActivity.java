@@ -10,6 +10,7 @@ import org.apache.http.impl.conn.tsccm.WaitingThread;
 
 import android.os.Bundle;
 import android.app.Activity;
+import android.content.Intent;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
@@ -22,6 +23,7 @@ public class ProxyMainActivity extends Activity {
 	EditText textOut;
 	TextView textIn;
 	String output;
+	Intent intentBarcodeScanner;
 	int done;
 
 	@Override
@@ -29,10 +31,14 @@ public class ProxyMainActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_proxy_main);
 		
+		intentBarcodeScanner = new Intent("com.google.zxing.client.android.SCAN");
+		intentBarcodeScanner.putExtra("SCAN_MODE", "QR_CODE_MODE");
 		textOut = (EditText)findViewById(R.id.textout);
 	    Button buttonSend = (Button)findViewById(R.id.send);
+	    Button buttonScanQR = (Button)findViewById(R.id.QR);
 	    textIn = (TextView)findViewById(R.id.textin);
 	    buttonSend.setOnClickListener(buttonSendOnClickListener);
+	    buttonScanQR.setOnClickListener(buttonGetQRCodeOmClickListener);
 	}
 
 	Button.OnClickListener buttonSendOnClickListener
@@ -94,6 +100,16 @@ public class ProxyMainActivity extends Activity {
 	  
 	
 	}};
+	
+	/* QR Scan button listener */
+	Button.OnClickListener buttonGetQRCodeOmClickListener = new Button.OnClickListener() {
+		
+		@Override
+		public void onClick(View arg0) {
+			startActivityForResult(intentBarcodeScanner, 0);
+		}
+	};
+	
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		// Inflate the menu; this adds items to the action bar if it is present.
@@ -101,4 +117,19 @@ public class ProxyMainActivity extends Activity {
 		return true;
 	}
 
+	/* get from Barcode scanner application */
+	 public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+	    if (requestCode == 0) {
+	        if (resultCode == RESULT_OK) {
+	            // contents contains whatever was encoded
+	            String contents = intent.getStringExtra("SCAN_RESULT");
+
+	            // Format contains the type of code i.e. UPC, EAN, QRCode etc...
+	            String format = intent.getStringExtra("SCAN_RESULT_FORMAT");
+	            
+	            textOut.setText(contents);
+
+	        }
+	    }
+	}
 }

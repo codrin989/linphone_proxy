@@ -18,7 +18,7 @@
 #define START_PORT_NO_DATA_INCOMING		51786
 #define START_PORT_NO_DATA_FORWARDING	51796
 #define SIP_UDP_PORT 					5060	/* TODO set dynamic */
-#define SIP_DATA_PORT 					7078	/* TODO set dynamic */
+#define SIP_DATA_PORT 					7076	/* TODO set dynamic */
 #define CONFIGURE_PORT					52124
 #define MANAGER_PORT					52123
 #define MAX_LEN 255
