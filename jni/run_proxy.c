@@ -254,7 +254,7 @@ run_proxy(
 								mirror_sock.sin_addr.s_addr = inet_addr(mirror_ip);
 								mirror_sock.sin_port = htons(proxy_to_proxy_data_port);
 
-								sprintf (buff, "mirroring started", mirror_ip);
+								sprintf (buff, "mirroring started");
 							}
 						} else if (strcmp (buff, "Stop") == 0 && proxy_state == MIRRORING) {
 							proxy_state = INTERCEPTING;

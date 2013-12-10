@@ -127,7 +127,7 @@ public class ProxyMainActivity extends Activity {
 	            // Format contains the type of code i.e. UPC, EAN, QRCode etc...
 	            String format = intent.getStringExtra("SCAN_RESULT_FORMAT");
 	            
-	            textOut.setText(contents);
+	            textIn.setText(contents);
 
 	        }
 	    }
