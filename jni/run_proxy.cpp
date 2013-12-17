@@ -36,9 +36,9 @@ run_proxy(
 	int rc, num_fds = LISTENING_SOCKETS, i;
 	unsigned int proxy_to_proxy_len, proxy_to_linphone_len, proxy_to_proxy_data_len,
 		proxy_to_linphone_data_len, manager_len, mirror_len;
-	char *buff = malloc(MAX_PACKET_SIZE), *mirror_ip;
+	char *buff = (char *)malloc(MAX_PACKET_SIZE), *mirror_ip;
 
-	struct pollfd *fds = malloc (num_fds * sizeof(struct pollfd));
+	struct pollfd *fds = (struct pollfd *)malloc (num_fds * sizeof(struct pollfd));
 	struct sockaddr_in proxy_to_proxy_sock, proxy_to_linphone_sock,
 	proxy_to_proxy_data_sock, proxy_to_linphone_data_sock,
 	manager_sock, mirror_sock;

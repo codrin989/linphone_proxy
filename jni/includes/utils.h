@@ -30,10 +30,10 @@
 #define CALLER_IP "192.168.1.135"	/* TODO set dynamic */
 #endif
 
-inline int
+int
 exit_error (const char * msg, int exit_code);
 
-inline int
+int
 return_error (const char * msg, int return_code);
 
 #define KICK(assertion, call_description) \
