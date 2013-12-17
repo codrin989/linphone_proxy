@@ -7,7 +7,7 @@
  Description : Hello World in C, Ansi-style
  ============================================================================
  */
-#include "main.h"
+#include "includes/main.h"
 
 int proxy_to_proxy_socket, proxy_to_linphone_socket, proxy_to_proxy_data_socket, proxy_to_linphone_data_socket, configure_socket;
 

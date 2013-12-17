@@ -4,7 +4,7 @@
  *  Created on: Mar 12, 2013
  *      Author: codrin
  */
-#include "init.h"
+#include "includes/init.h"
 
 int proxy_to_proxy_port, proxy_to_linphone_port, proxy_to_proxy_data_port, proxy_to_linphone_data_port, configure_port;
 
