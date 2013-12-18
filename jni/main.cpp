@@ -8,12 +8,28 @@
  ============================================================================
  */
 #include "includes/main.h"
+#include <pthread.h>
+
+using namespace std;
 
 int proxy_to_proxy_socket, proxy_to_linphone_socket, proxy_to_proxy_data_socket, proxy_to_linphone_data_socket, configure_socket;
+
+void *console_routine(void *arg)
+{
+	char line[256];
+
+	while (1) {
+		scanf("%s", line);
+		printf("received: %s\n", line);
+	}
+
+	return arg;
+}
 
 int
 main(int argc, char *argv[]) {
 	int rc;
+	pthread_t console_thread;
 
 	KICK(argc < 2, "incorrect usage\n"
 	"Usage:\n"
@@ -39,6 +55,9 @@ main(int argc, char *argv[]) {
 			break;
 	}while(1);
 */
+
+	rc = pthread_create(&console_thread, NULL, console_routine, NULL);
+
 	rc = run_proxy(
 			proxy_to_proxy_socket,
 			proxy_to_linphone_socket,
