@@ -1,32 +1,31 @@
-#ifndef PARSE_H_
-#define PARSE_H_ 1
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifndef PARSE_H_
+#define PARSE_H_ 1
 
 #include <string.h>
 
-enum {
-	INVITE = 1,
-	INVITE_OK,
-	ACK
-};
+typedef struct _invite_data_t {
+	char from[64];
+	char to[64];
+	char from_tag[16];
+	char call_id[16];
+} invite_data_t;
 
-int string_eq(char *buffer, char *word);
+typedef struct _ack_data_t {
+	char from[64];
+	char to[64];
+	char from_tag[16];
+	char to_tag[16];	
+	char call_id[16];
+} ack_data_t;
 
-int parse(char *buffer, int len);
-void get_first_tag(char *buffer, char *tag);
-void get_second_tag(char *buffer, char *tag);
-void get_call_id(char *buffer, char *call_id);
+int begins_with(char *buffer, char *word);
+void get_ack_data(char *buffer, ack_data_t *ack_data);
+void get_invite_data(char *buffer, invite_data_t *invite_data);
 
-int get_spoofed_invite(char *buffer, char *peer_ip, char *remote_ip,
-		char *call_id, char *local_tag, char *remote_tag);
-int get_spoofed_ack(char *buffer, char *peer_ip, char *remote_ip,
-		char *call_id, char *local_tag, char *remote_tag);
-
+#endif /* PARSE_H_ */
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* PARSE_H_ */

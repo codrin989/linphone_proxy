@@ -21,15 +21,15 @@ case "$1" in
         iptables -t nat -F OUTPUT
         iptables -t nat -F POSTROUTING
 
-        iptables -t nat -A OUTPUT -p udp --dport 5060 -j DNAT --to 127.0.0.1:50616
+        iptables -t nat -A OUTPUT -p udp --sport 5060 -d $REMOTE_IP --dport 5060 -j DNAT --to 127.0.0.1:50616
         iptables -t nat -A POSTROUTING -p udp -d 127.0.0.1 --sport 50616 --dport 5060 -j SNAT --to-source=$REMOTE_IP:5060
 
-        iptables -t nat -A OUTPUT -p udp --dport 7078 -j DNAT --to 127.0.0.1:51796
+        iptables -t nat -A OUTPUT -p udp --sport 7078 -d $REMOTE_IP --dport 7078 -j DNAT --to 127.0.0.1:51796
         iptables -t nat -A POSTROUTING -p udp -d 127.0.0.1 --sport 51796 --dport 7078 -j SNAT --to-source=$REMOTE_IP:7078
         ;;
 
     stop)
-        echo "start iptables ..."
+        echo "stop iptables ..."
         iptables -t nat -F OUTPUT
         iptables -t nat -F POSTROUTING
         ;;

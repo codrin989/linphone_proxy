@@ -5,18 +5,17 @@
  *      Author: codrin
  */
 
-#ifndef UTILS_H_
-#define UTILS_H_
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifndef UTILS_H_
+#define UTILS_H_
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_PACKET_SIZE 1450
+#define DEBUG 1
 
 /* error printing macro */
 #define ERR(call_description) \
@@ -45,14 +44,17 @@ extern "C" {
 		} \
 	} while(0)
 
+#if DEBUG
 #define eprintf(...) \
 	do { \
 		fprintf(stdout, ##__VA_ARGS__); \
 		fflush(stdout); \
 	} while (0)
-
-#ifdef __cplusplus
-}
+#else
+#define eprintf(...)
 #endif
 
 #endif /* UTILS_H_ */
+#ifdef __cplusplus
+}
+#endif

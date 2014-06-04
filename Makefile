@@ -3,8 +3,7 @@ PATH_HEADERS = jni/includes
 
 SRC_C = \
 	$(PATH_C)/main.c \
-	$(PATH_C)/parse.c \
-	$(PATH_C)/socket.c
+	$(PATH_C)/parse.c
 
 SRC_HEADERS = \
 	$(PATH_HEADERS)/socket.h \
@@ -19,7 +18,7 @@ build: all
 
 all: $(EXE)
 
-$(EXE): $(SRC_CPP) $(SRC_HEADERS)
+$(EXE): $(SRC_C) $(SRC_HEADERS)
 	$(CC) $(CFLAGS) $(SRC_C) -o $@
 
 clean:
