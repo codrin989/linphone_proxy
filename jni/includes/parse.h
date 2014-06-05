@@ -25,6 +25,8 @@ int begins_with(char *buffer, char *word);
 void get_ack_data(char *buffer, ack_data_t *ack_data);
 void get_invite_data(char *buffer, invite_data_t *invite_data);
 
+void replace_all(char *original, char *find, char *replace);
+
 #endif /* PARSE_H_ */
 #ifdef __cplusplus
 }

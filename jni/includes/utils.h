@@ -54,6 +54,8 @@ extern "C" {
 #define eprintf(...)
 #endif
 
+#define MAX_PACKET_SIZE 1500
+
 #endif /* UTILS_H_ */
 #ifdef __cplusplus
 }

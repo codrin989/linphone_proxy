@@ -89,3 +89,23 @@ void get_ack_data(char *buffer, ack_data_t *ack_data)
 	strncpy(ack_data->call_id, p, len);
 	ack_data->call_id[len] = 0;
 }
+
+void replace_all(char *original, char *find, char *replace)
+{
+	char buffer[MAX_PACKET_SIZE];
+	char *p, *q;
+	int len;
+
+	memset(buffer, 0, MAX_PACKET_SIZE);
+
+	p = q = original;
+	while ((q = strstr(q, find))) {
+		len = q - p;
+		printf("len: %d\n", len);
+		strncat(buffer, p, len);
+		strcat(buffer, replace);
+		q = p = q + strlen(find);
+	}
+	strcat(buffer, p);
+	strcpy(original, buffer);
+}

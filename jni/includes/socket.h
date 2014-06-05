@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 #ifndef SOCKET_H_
-#define SOCKET_H_
+#define SOCKET_H_ 1
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -27,8 +27,6 @@ extern "C" {
 
 #define CONFIGURE_PORT 52124
 #define MANAGER_PORT 52123
-
-#define MAX_PACKET_SIZE 1500
 
 typedef struct _packet_t {
 	char buffer[MAX_PACKET_SIZE];
@@ -82,10 +80,11 @@ inline int recv_msg(int fd, struct sockaddr_in *addr, char *buffer)
 	socklen_t addrlen;
 	int rc;
 
+	memset(buffer, 0, MAX_PACKET_SIZE);
 	rc = recvfrom(fd, buffer, MAX_PACKET_SIZE, 0,
 			(struct sockaddr *)addr, &addrlen);
 	DIE(-1 == rc, "recvfrom");
-#if 1
+#if 0
 	inet_ntop(AF_INET, &(addr->sin_addr), address, INET_ADDRSTRLEN);
 	eprintf("recv <%s:%d> %d bytes\n",
 			address, ntohs(addr->sin_port), rc);
@@ -101,7 +100,7 @@ inline void send_msg(int fd, struct sockaddr_in *addr, char *buffer, int count)
 	rc = sendto(fd, buffer, count, 0,
 			(struct sockaddr *)addr, sizeof(struct sockaddr_in));
 	DIE(rc != count, "sendto");
-#if 1
+#if 0
 	inet_ntop(AF_INET, &(addr->sin_addr), address, INET_ADDRSTRLEN);
 	eprintf("send <%s:%d> %d bytes\n",
 			address, ntohs(addr->sin_port), rc);
