@@ -1,93 +1,59 @@
-#include "includes/utils.h"
+#include "includes/util.h"
 #include "includes/parse.h"
+#include "includes/socket.h"
 
-int begins_with(char *buffer, char *word)
+inline int begins_with(char *buffer, char *word)
 {
 	return (0 == strncmp(buffer, word, strlen(word))) ? 1 : 0;
 }
 
-void get_invite_data(char *buffer, invite_data_t *invite_data)
+void get_data(char *buffer, packet_data_t *packet_data)
 {
 	char *p, *q;
 	int len; 
 
-	printf("here\n");
-	p = strstr(buffer, "From: ") + 6;
+	printf("get branch\n");
+	p = strstr(buffer, "branch=") + 7;
+	q = strstr(p, "\r\n");
+	len = q - p;
+	strncpy(packet_data->branch, p, len);
+	packet_data->branch[len] = 0;	
+	p = strstr(packet_data->branch, ";received=");
+	if (p) {
+		*p = 0;
+	}
+
+	p = strstr(q, "From: ") + 6;
 	q = strstr(p, ";");
 	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(invite_data->from, p, len);
-	invite_data->from[len] = 0;
+	strncpy(packet_data->from, p, len);
+	packet_data->from[len] = 0;
 
-	printf("here\n");
 	p = strstr(q, "tag=") + 4;
 	q = strstr(p, "\r\n");
 	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(invite_data->from_tag, p, len);
-	invite_data->from_tag[len] = 0;
+	strncpy(packet_data->from_tag, p, len);
+	packet_data->from_tag[len] = 0;
 
-	printf("here\n");
 	p = strstr(q, "To: ") + 4;
 	q = strstr(p, ">") + 1;
 	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(invite_data->to, p, len);
-	invite_data->to[len] = 0;
+	strncpy(packet_data->to, p, len);
+	packet_data->to[len] = 0;
 
-	printf("here\n");
-	p = strstr(p, "Call-ID: ") + 9;
+	if ((p = strstr(q, "tag="))) {
+		p += 4;
+		q = strstr(p, "\r\n");
+		len = q - p;
+		strncpy(packet_data->to_tag, p, len);
+		packet_data->to_tag[len] = 0;
+	}
+
+	p = strstr(q, "Call-ID: ") + 9;
 	q = strstr(p, "\r\n");
 	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(invite_data->call_id, p, len);
-	invite_data->call_id[len] = 0;
-}
-
-void get_ack_data(char *buffer, ack_data_t *ack_data)
-{
-	char *p, *q;
-	int len; 
-
-	printf("here\n");
-	p = strstr(buffer, "From: ") + 6;
-	q = strstr(p, ";");
-	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(ack_data->from, p, len);
-	ack_data->from[len] = 0;
-
-	printf("here\n");
-	p = strstr(q, "tag=") + 4;
-	q = strstr(p, "\r\n");
-	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(ack_data->from_tag, p, len);
-	ack_data->from_tag[len] = 0;
-
-	printf("here\n");
-	p = strstr(q, "To: ") + 4;
-	q = strstr(p, ">") + 1;
-	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(ack_data->to, p, len);
-	ack_data->to[len] = 0;
-
-	printf("here\n");
-	p = strstr(q, "tag=") + 4;
-	q = strstr(p, "\r\n");
-	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(ack_data->to_tag, p, len);
-	ack_data->to_tag[len] = 0;
-
-	printf("here\n");
-	p = strstr(p, "Call-ID: ") + 9;
-	q = strstr(p, "\r\n");
-	len = q - p;
-	printf("len: %d\n", len);
-	strncpy(ack_data->call_id, p, len);
-	ack_data->call_id[len] = 0;
+	strncpy(packet_data->call_id, p, len);
+	packet_data->call_id[len] = 0;
 }
 
 void replace_all(char *original, char *find, char *replace)
@@ -101,7 +67,6 @@ void replace_all(char *original, char *find, char *replace)
 	p = q = original;
 	while ((q = strstr(q, find))) {
 		len = q - p;
-		printf("len: %d\n", len);
 		strncat(buffer, p, len);
 		strcat(buffer, replace);
 		q = p = q + strlen(find);

@@ -3,12 +3,13 @@ PATH_HEADERS = jni/includes
 
 SRC_C = \
 	$(PATH_C)/main.c \
-	$(PATH_C)/parse.c
+	$(PATH_C)/parse.c \
+	$(PATH_C)/socket.c
 
 SRC_HEADERS = \
 	$(PATH_HEADERS)/socket.h \
 	$(PATH_HEADERS)/parse.h \
-	$(PATH_HEADERS)/utils.h
+	$(PATH_HEADERS)/util.h
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O3

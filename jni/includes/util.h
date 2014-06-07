@@ -5,15 +5,15 @@
  *      Author: codrin
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#ifndef UTILS_H_
-#define UTILS_H_
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#ifndef UTIL_H_
+#define UTIL_H_
 
 #define DEBUG 1
 
@@ -54,9 +54,7 @@ extern "C" {
 #define eprintf(...)
 #endif
 
-#define MAX_PACKET_SIZE 1500
-
-#endif /* UTILS_H_ */
+#endif /* UTIL_H_ */
 #ifdef __cplusplus
 }
 #endif
