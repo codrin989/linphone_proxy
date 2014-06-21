@@ -19,57 +19,117 @@ typedef enum {
 
 state proxy_state;
 
-
-extern int proxy_to_proxy_port, proxy_to_proxy_data_port;
+extern enum behavior_type behavior;
 
 int
 run_proxy(
-		int proxy_to_proxy_socket,
-		int proxy_to_linphone_socket,
-		int proxy_to_proxy_data_socket,
-		int proxy_to_linphone_data_socket,
+		struct udp_session *linphone_proxy,
+		struct tcp_session *vnc_proxy,
 		int configure_socket,
 		char *remote_ip)
 {
 	proxy_state = NONE;
-	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", proxy_to_proxy_port, proxy_to_proxy_data_port);
+	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", linphone_proxy->proxy_to_proxy_port, linphone_proxy->proxy_to_proxy_data_port);
 	int rc, num_fds = LISTENING_SOCKETS, i;
-	unsigned int proxy_to_proxy_len, proxy_to_linphone_len, proxy_to_proxy_data_len,
-		proxy_to_linphone_data_len, manager_len, mirror_len;
+	unsigned int udp_proxy_to_proxy_len, udp_proxy_to_linphone_len, udp_proxy_to_proxy_data_len,
+		udp_proxy_to_linphone_data_len, manager_len, mirror_len, tcp_proxy_to_proxy_len, tcp_proxy_to_app_len;
 	char *buff = malloc(MAX_PACKET_SIZE), *mirror_ip;
 
-	struct pollfd *fds = malloc (num_fds * sizeof(struct pollfd));
-	struct sockaddr_in proxy_to_proxy_sock, proxy_to_linphone_sock,
-	proxy_to_proxy_data_sock, proxy_to_linphone_data_sock,
-	manager_sock, mirror_sock;
+	/* keep an extra one when acting as a client on the TCP side */
+	struct pollfd *fds = malloc ((num_fds + 1)* sizeof(struct pollfd));
+	struct sockaddr_in udp_proxy_to_proxy_sock, udp_proxy_to_linphone_sock, udp_proxy_to_proxy_data_sock, udp_proxy_to_linphone_data_sock,
+		tcp_proxy_to_proxy_sock, tcp_proxy_to_app_sock, manager_sock, mirror_sock;
+	int tcp_proxy_to_proxy_client_socket = -1, tcp_proxy_to_app_client_socket = -1;
 
-	/* init caller socket */
-	proxy_to_proxy_len = sizeof(proxy_to_proxy_sock);
-	memset(&proxy_to_proxy_sock, 0, sizeof(proxy_to_proxy_sock));
-	proxy_to_proxy_sock.sin_family = AF_INET;
-	proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(remote_ip);
-	proxy_to_proxy_sock.sin_port = htons(proxy_to_proxy_port);
+	/* init UDP caller socket */
+	udp_proxy_to_proxy_len = sizeof(udp_proxy_to_proxy_sock);
+	memset(&udp_proxy_to_proxy_sock, 0, sizeof(udp_proxy_to_proxy_sock));
+	udp_proxy_to_proxy_sock.sin_family = AF_INET;
+	udp_proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(remote_ip);
+	udp_proxy_to_proxy_sock.sin_port = htons(linphone_proxy->proxy_to_proxy_port);
 
-	/* init receiver socket */
-	proxy_to_linphone_len = sizeof(proxy_to_linphone_sock);
-	memset(&proxy_to_linphone_sock, 0, sizeof(proxy_to_linphone_sock));
-	proxy_to_linphone_sock.sin_family = AF_INET;
-	proxy_to_linphone_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
-	proxy_to_linphone_sock.sin_port = htons(SIP_UDP_PORT);
+	/* init UDP receiver socket */
+	udp_proxy_to_linphone_len = sizeof(udp_proxy_to_linphone_sock);
+	memset(&udp_proxy_to_linphone_sock, 0, sizeof(udp_proxy_to_linphone_sock));
+	udp_proxy_to_linphone_sock.sin_family = AF_INET;
+	udp_proxy_to_linphone_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
+	udp_proxy_to_linphone_sock.sin_port = htons(SIP_UDP_PORT);
 
-	/* init caller data socket */
-	proxy_to_proxy_data_len = sizeof(proxy_to_proxy_data_sock);
-	memset(&proxy_to_proxy_data_sock, 0, sizeof(proxy_to_proxy_data_sock));
-	proxy_to_proxy_data_sock.sin_family = AF_INET;
-	proxy_to_proxy_data_sock.sin_addr.s_addr = inet_addr(remote_ip);
-	proxy_to_proxy_data_sock.sin_port = htons(proxy_to_proxy_data_port);
+	/* init UDP caller data socket */
+	udp_proxy_to_proxy_data_len = sizeof(udp_proxy_to_proxy_data_sock);
+	memset(&udp_proxy_to_proxy_data_sock, 0, sizeof(udp_proxy_to_proxy_data_sock));
+	udp_proxy_to_proxy_data_sock.sin_family = AF_INET;
+	udp_proxy_to_proxy_data_sock.sin_addr.s_addr = inet_addr(remote_ip);
+	udp_proxy_to_proxy_data_sock.sin_port = htons(linphone_proxy->proxy_to_proxy_data_port);
 
-	/* init receiver data socket */
-	proxy_to_linphone_data_len = sizeof(proxy_to_linphone_data_sock);
-	memset(&proxy_to_linphone_data_sock, 0, sizeof(proxy_to_linphone_data_sock));
-	proxy_to_linphone_data_sock.sin_family = AF_INET;
-	proxy_to_linphone_data_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
-	proxy_to_linphone_data_sock.sin_port = htons(SIP_DATA_PORT);
+	/* init UDP receiver data socket */
+	udp_proxy_to_linphone_data_len = sizeof(udp_proxy_to_linphone_data_sock);
+	memset(&udp_proxy_to_linphone_data_sock, 0, sizeof(udp_proxy_to_linphone_data_sock));
+	udp_proxy_to_linphone_data_sock.sin_family = AF_INET;
+	udp_proxy_to_linphone_data_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
+	udp_proxy_to_linphone_data_sock.sin_port = htons(SIP_DATA_PORT);
+
+	/* init TCP caller socket */
+	tcp_proxy_to_proxy_len = sizeof(tcp_proxy_to_proxy_sock);
+	memset(&tcp_proxy_to_proxy_sock, 0, tcp_proxy_to_proxy_len);
+	tcp_proxy_to_proxy_sock.sin_family = AF_INET;
+	tcp_proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(remote_ip);
+	tcp_proxy_to_proxy_sock.sin_port = htons(vnc_proxy->proxy_to_proxy_port);
+
+	/* init TCP receiver socket */
+	tcp_proxy_to_app_len = sizeof(tcp_proxy_to_app_sock);
+	memset(&tcp_proxy_to_app_sock, 0, tcp_proxy_to_app_len);
+	tcp_proxy_to_app_sock.sin_family = AF_INET;
+	tcp_proxy_to_app_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
+	tcp_proxy_to_app_sock.sin_port = htons(VNC_TCP_PORT);
+
+	if (behavior == SERVER) {
+		/* Act like a SERVER and listen to CLIENTS */
+
+		/* listen on the proxy-to-proxy socket for incomming connections to server */
+		rc = listen(vnc_proxy->proxy_to_proxy_socket, 5);
+		if (rc < 0)
+			return_error("Failed to listen on the proxy-to-proxy TCP socket\n", rc);
+
+		/* connect to the VNC server */
+		printf("Trying to connect to the VNC server\n");
+		for (i = 1; i <= 10; i++) {
+			rc = connect(vnc_proxy->proxy_to_app_socket,  (struct sockaddr *) &tcp_proxy_to_app_sock, tcp_proxy_to_app_len);
+			if (!rc) {
+				printf("Connected to VNC server...\n");
+				break;
+			}
+			printf("Could not connect to VNC server Retrying %d ...\n", i);
+			sleep(3);
+		}
+
+		if (i == 11)
+			return_error("Failed to connect to VNC server\n", -1);
+	} else if (behavior == CLIENT) {
+		/* act as a CLIENT and CONNECT to TCP remove SERVER */
+
+		for (i = 1; i <= 10; i++) {
+			rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
+			if (!rc) {
+				printf("Connected to Remote TCP proxy...\n");
+				break;
+			}
+			printf("Could not connect to Remote TCP proxy Retrying %d ...\n", i);
+			sleep(3);
+		}
+
+		if (i == 11)
+			return_error("Failed to connect to Remote TCP proxy server\n", -1);
+
+		/* Act as server for the localhost VNC client */
+		/* listen on the proxy-to-app socket for incomming connections from VNC client */
+		rc = listen(vnc_proxy->proxy_to_app_socket, 5);
+		if (rc < 0)
+			return_error("Failed to listen on the proxy-to-app TCP socket\n", rc);
+
+	} else {
+		return_error("Undefined behavior %d\n", behavior);
+	}
 
 	/* init manager socket */
 	manager_len = sizeof(manager_sock);
@@ -91,25 +151,33 @@ run_proxy(
 	fds[0].events = POLLIN;
 	fds[0].revents = 0;
 
-	fds[1].fd = proxy_to_proxy_socket;
+	fds[1].fd = linphone_proxy->proxy_to_proxy_socket;
 	fds[1].events = POLLIN;
 	fds[1].revents = 0;
 
-	fds[2].fd = proxy_to_linphone_socket;
+	fds[2].fd = linphone_proxy->proxy_to_linphone_socket;
 	fds[2].events = POLLIN;
 	fds[2].revents = 0;
 
-	fds[3].fd = proxy_to_proxy_data_socket;
+	fds[3].fd = linphone_proxy->proxy_to_proxy_data_socket;
 	fds[3].events = POLLIN;
 	fds[3].revents = 0;
 
-	fds[4].fd = proxy_to_linphone_data_socket;
+	fds[4].fd = linphone_proxy->proxy_to_linphone_data_socket;
 	fds[4].events = POLLIN;
 	fds[4].revents = 0;
 
 	fds[5].fd = configure_socket;
 	fds[5].events = POLLIN;
 	fds[5].revents = 0;
+
+	fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+	fds[6].events = POLLIN;
+	fds[6].revents = 0;
+
+	fds[7].fd = vnc_proxy->proxy_to_app_socket;
+	fds[7].events = POLLIN;
+	fds[7].revents = 0;
 
 	while (1) {
 		if (poll(fds, num_fds, -1) == -1)
@@ -118,166 +186,298 @@ run_proxy(
 		//printf("poll out\n");
 
 		for (i=0; i<num_fds; i++) {
-			if (fds[i].revents != 0) {
-				/* input command */
-				if(i == 0) {
-					//printf("command received\n");
-					fgets(buff, MAX_LEN, stdin);
-					buff[strlen(buff) - 1] = '\0';
-					if (strcmp(buff, "exit") == 0) {
-						goto out;
-					}
-				}else if(i == 1){ /* call packet from another proxy */
-					if (proxy_state != MIRRORING)
-						proxy_state = INITIATING;
+			if (fds[i].revents == 0)
+				continue;
+			/* input command */
+			if(i == 0) {
+				//printf("command received\n");
+				fgets(buff, MAX_LEN, stdin);
+				buff[strlen(buff) - 1] = '\0';
+				if (strcmp(buff, "exit") == 0) {
+					goto out;
+				}
+			}else if(i == 1){ /* call packet from another proxy */
+				if (proxy_state != MIRRORING)
+					proxy_state = INITIATING;
 
-					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &proxy_to_proxy_sock, &proxy_to_proxy_len)) < 0) {
-						printf("CALL: no message received on proxy-to-proxy port\n");
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &udp_proxy_to_proxy_sock, &udp_proxy_to_proxy_len)) < 0) {
+					printf("CALL: no message received on proxy-to-proxy port\n");
+				}
+				else {
+					printf("CALL: from [REMOTE: %d] - %d bytes\n", ntohs(udp_proxy_to_proxy_sock.sin_port), rc);
+					if (sendto(linphone_proxy->proxy_to_linphone_socket, buff, rc, 0, (struct sockaddr *) &udp_proxy_to_linphone_sock, sizeof(udp_proxy_to_linphone_sock)) != rc) {
+						perror("CALL: Cannot forward message to linphone application\n");
 					}
 					else {
-						printf("CALL: from [REMOTE: %d] - %d bytes\n", ntohs(proxy_to_proxy_sock.sin_port), rc);
-						if (sendto(proxy_to_linphone_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_linphone_sock, sizeof(proxy_to_linphone_sock)) != rc) {
-							perror("CALL: Cannot forward message to linphone application\n");
+						printf("CALL: sent [LINPHONE] - %d bytes\n", rc);
+						memset(buff, 0, MAX_PACKET_SIZE);
+					}
+				}
+			}else if(i == 2) {	/* received something from localhost linphone socket */
+				if (proxy_state != MIRRORING)
+					proxy_state = INITIATING;
+
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &udp_proxy_to_linphone_sock, &udp_proxy_to_linphone_len)) < 0) {
+					perror("CALL: no message received on forwarding port\n");
+				}
+				else {
+					printf("CALL: from [LINPHONE: %d] - %d bytes\n", htons(udp_proxy_to_linphone_sock.sin_port), rc);
+					//getchar();
+					if (sendto(linphone_proxy->proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &udp_proxy_to_proxy_sock, sizeof(udp_proxy_to_proxy_sock)) != rc) {
+						perror("CALL: Cannot send linphone message back\n");
+					}
+					else {
+						printf("CALL: sent [REMOTE] - %d bytes\n", rc);
+						memset(buff, 0, MAX_PACKET_SIZE);
+					}
+				}
+			}else if(i == 3) {/* data packet form another caller */
+				if (proxy_state == NONE || proxy_state == DATA_COPY)
+					proxy_state = DATA_COPY;
+				else {
+					if (proxy_state < INTERCEPTING)
+						proxy_state = INTERCEPTING;
+				}
+
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &udp_proxy_to_proxy_data_sock, &udp_proxy_to_proxy_data_len)) < 0) {
+					printf ("DATA: no message received on listening data port\n");
+				}
+				else {
+					fds[i].revents = 0;
+					if (proxy_state != DATA_COPY) {/* TODO: for now */
+						printf ("DATA: from [REMOTE: %d] - %d bytes\n", ntohs(udp_proxy_to_proxy_data_sock.sin_port), rc);
+						if (sendto(linphone_proxy->proxy_to_linphone_data_socket, buff, rc, 0, (struct sockaddr *) &udp_proxy_to_linphone_data_sock, sizeof(udp_proxy_to_linphone_data_sock)) != rc) {
+							perror("DATA: Cannot forward data packet to linphone application\n");
 						}
 						else {
-							printf("CALL: sent [LINPHONE] - %d bytes\n", rc);
-							memset(buff, 0, MAX_PACKET_SIZE);
+							printf("DATA: sent [LINPHONE] - %d bytes\n", rc);
 						}
-					}
-				}else if(i == 2) {	/* received something from localhost linphone socket */
-					if (proxy_state != MIRRORING)
-						proxy_state = INITIATING;
 
-					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &proxy_to_linphone_sock, &proxy_to_linphone_len)) < 0) {
-						perror("CALL: no message received on forwarding port\n");
-					}
-					else {
-						printf("CALL: from [LINPHONE: %d] - %d bytes\n", htons(proxy_to_linphone_sock.sin_port), rc);
-						//getchar();
-						if (sendto(proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_proxy_sock, sizeof(proxy_to_proxy_sock)) != rc) {
-							perror("CALL: Cannot send linphone message back\n");
-						}
-						else {
-							printf("CALL: sent [REMOTE] - %d bytes\n", rc);
-							memset(buff, 0, MAX_PACKET_SIZE);
-						}
-					}
-				}else if(i == 3) {/* data packet form another caller */
-					if (proxy_state == NONE || proxy_state == DATA_COPY)
-						proxy_state = DATA_COPY;
-					else {
-						if (proxy_state < INTERCEPTING)
-							proxy_state = INTERCEPTING;
-					}
+						if (proxy_state == MIRRORING) {
 
-					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &proxy_to_proxy_data_sock, &proxy_to_proxy_data_len)) < 0) {
-						printf ("DATA: no message received on listening data port\n");
-					}
-					else {
-						fds[i].revents = 0;
-						if (proxy_state != DATA_COPY) {/* TODO: for now */
-							printf ("DATA: from [REMOTE: %d] - %d bytes\n", ntohs(proxy_to_proxy_data_sock.sin_port), rc);
-							if (sendto(proxy_to_linphone_data_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_linphone_data_sock, sizeof(proxy_to_linphone_data_sock)) != rc) {
-								perror("DATA: Cannot forward data packet to linphone application\n");
+							if (sendto(linphone_proxy->proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &mirror_sock, sizeof(mirror_sock)) != rc) {
+								printf("MIRROR_DATA: Cannot forward data packet to mirror (%s)\n", mirror_ip);
+								perror("MIRRORING");
 							}
 							else {
-								printf("DATA: sent [LINPHONE] - %d bytes\n", rc);
+								printf("MIRROR_DATA: sent [MIRROR] - %d bytes\n", rc);
 							}
-
-							if (proxy_state == MIRRORING) {
-
-								if (sendto(proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &mirror_sock, sizeof(mirror_sock)) != rc) {
-									printf("MIRROR_DATA: Cannot forward data packet to mirror (%s)\n", mirror_ip);
-									perror("MIRRORING");
-								}
-								else {
-									printf("MIRROR_DATA: sent [MIRROR] - %d bytes\n", rc);
-								}
-							}
-
-							memset (buff, 0, MAX_PACKET_SIZE);
-						} else {
-							/* TODO: forward later to local linphone */
-							printf ("MIRROED_DATA: from [REMOTE: %d] - %d bytes\n", ntohs(proxy_to_proxy_data_sock.sin_port), rc);
-							memset (buff, 0, MAX_PACKET_SIZE);
 						}
+
+						memset (buff, 0, MAX_PACKET_SIZE);
+					} else {
+						/* TODO: forward later to local linphone */
+						printf ("MIRROED_DATA: from [REMOTE: %d] - %d bytes\n", ntohs(udp_proxy_to_proxy_data_sock.sin_port), rc);
+						memset (buff, 0, MAX_PACKET_SIZE);
 					}
 				}
-				else if(i == 4) {	/* data packet to another caller */
-					if (proxy_state == NONE)
-						printf ("ERR: INTERCEPTING is not possible without INITIATION\n");
-					else {
-						if (proxy_state < INTERCEPTING)
-							proxy_state = INTERCEPTING;
-					}
+			}
+			else if(i == 4) {	/* data packet to another caller */
+				if (proxy_state == NONE)
+					printf ("ERR: INTERCEPTING is not possible without INITIATION\n");
+				else {
+					if (proxy_state < INTERCEPTING)
+						proxy_state = INTERCEPTING;
+				}
 
-					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &proxy_to_linphone_data_sock, &proxy_to_linphone_data_len)) < 0) {
-						perror("DATA: no message received on forwarding port\n");
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &udp_proxy_to_linphone_data_sock, &udp_proxy_to_linphone_data_len)) < 0) {
+					perror("DATA: no message received on forwarding port\n");
+				}
+				else {
+					printf ("TCP DATA: from [REMOTE: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
+					if (sendto(linphone_proxy->proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &udp_proxy_to_proxy_data_sock, sizeof(udp_proxy_to_proxy_data_sock)) != rc) {
+						perror("DATA: Cannot forward linphone data packet\n");
 					}
 					else {
-						printf("DATA: from [LINPHONE: %d] - %d bytes\n", htons(proxy_to_linphone_data_sock.sin_port), rc);
-						if (sendto(proxy_to_proxy_data_socket, buff, rc, 0, (struct sockaddr *) &proxy_to_proxy_data_sock, sizeof(proxy_to_proxy_data_sock)) != rc) {
-							perror("DATA: Cannot forward linphone data packet\n");
-						}
-						else {
-							printf("DATA: sent [REMOTE] - %d bytes\nDone\n", rc);
-							memset (buff, 0, MAX_PACKET_SIZE);
-						}
+						printf("DATA: sent [REMOTE] - %d bytes\nDone\n", rc);
+						memset (buff, 0, MAX_PACKET_SIZE);
 					}
 				}
-				else if(i == 5) { /* packet from manager */
-					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &manager_sock, &manager_len)) < 0) {
-						perror("CONFIGURE: no message received\n");
+			}
+			else if(i == 5) { /* packet from manager */
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &manager_sock, &manager_len)) < 0) {
+					perror("CONFIGURE: no message received\n");
+				}
+				else {
+					printf("MGM: from [PROXY MANAGER: %d] - %d bytes\n\tMessage: %s\n", htons(manager_sock.sin_port), rc, buff);
+
+					if (strcmp (buff, "Test") == 0)
+					{
+						strcpy (buff, "Test ok");
+					} else if (strstr (buff, "IP: ") == buff){
+						printf ("Mirroring command received: %s\n", buff);
+
+						if (proxy_state == MIRRORING) {
+							strcpy (buff, "ERR: already mirroring");
+						} else if (proxy_state != INTERCEPTING) {
+							strcpy (buff, "ERR: No packets intercepting at the moment");
+						} else {
+							proxy_state = MIRRORING;
+							mirror_ip = strdup(buff + strlen("IP: "));/* TODO: carefull here */
+							printf ("DBG: mirrored ip is %s\n", mirror_ip);
+							/* init mirror socket */
+
+							mirror_len = sizeof(mirror_sock);
+							memset(&mirror_sock, 0, mirror_len);
+							mirror_sock.sin_family = AF_INET;
+							mirror_sock.sin_addr.s_addr = inet_addr(mirror_ip);
+							mirror_sock.sin_port = htons(linphone_proxy->proxy_to_proxy_data_port);
+
+							sprintf (buff, "mirroring started");
+						}
+					} else if (strcmp (buff, "Stop") == 0 && proxy_state == MIRRORING) {
+						proxy_state = INTERCEPTING;
+						strcpy (buff, "mirroring stopped");
+						free (mirror_ip);
+					} else {
+						strcpy (buff, "unknown command");
+					}
+
+					if (sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock)) != (ssize_t)strlen(buff)) {
+						perror("CONFIGURE: Cannot answer to [PROXY MANAGER]\n");
 					}
 					else {
-						printf("MGM: from [PROXY MANAGER: %d] - %d bytes\n\tMessage: %s\n", htons(manager_sock.sin_port), rc, buff);
-
-						if (strcmp (buff, "Test") == 0)
-						{
-							strcpy (buff, "Test ok");
-						} else if (strstr (buff, "IP: ") == buff){
-							printf ("Mirroring command received: %s\n", buff);
-
-							if (proxy_state == MIRRORING) {
-								strcpy (buff, "ERR: allready mirroring");
-							} else if (proxy_state != INTERCEPTING) {
-								strcpy (buff, "ERR: No packets intercepting at the moment");
-							} else {
-								proxy_state = MIRRORING;
-								mirror_ip = strdup(buff + strlen("IP: "));/* TODO: carefull here */
-								printf ("DBG: mirrored ip is %s\n", mirror_ip);
-								/* init mirror socket */
-
-								mirror_len = sizeof(mirror_sock);
-								memset(&mirror_sock, 0, mirror_len);
-								mirror_sock.sin_family = AF_INET;
-								mirror_sock.sin_addr.s_addr = inet_addr(mirror_ip);
-								mirror_sock.sin_port = htons(proxy_to_proxy_data_port);
-
-								sprintf (buff, "mirroring started");
-							}
-						} else if (strcmp (buff, "Stop") == 0 && proxy_state == MIRRORING) {
-							proxy_state = INTERCEPTING;
-							strcpy (buff, "mirroring stopped");
-							free (mirror_ip);
-						} else {
-							strcpy (buff, "unknown command");
+						printf("MGM: sent [PROXY MANAGER: %s] - %d bytes\n", buff, rc);
+					}
+					memset (buff, 0, MAX_PACKET_SIZE);
+				}
+				/* listening TCP proxy-to-proxy socket */
+			} else if (i == 6) {
+				if (behavior == SERVER) {
+					if (tcp_proxy_to_proxy_client_socket != -1) {
+						perror("Another application tries to connect to TCP server\n");
+					} else {
+						tcp_proxy_to_proxy_client_socket = accept(vnc_proxy->proxy_to_proxy_socket, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len);
+						if (tcp_proxy_to_proxy_client_socket == -1) {
+							perror("TCP: Accept returned an error\n");
 						}
-
-						if (sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock)) != (ssize_t)strlen(buff)) {
-							perror("CONFIGURE: Cannot answer to [PROXY MANAGER]\n");
+						/* add socket to fds */
+						num_fds++;
+						fds[8].fd = tcp_proxy_to_proxy_client_socket;
+						fds[8].events = POLLIN;
+						fds[8].revents = 0;
+					}
+				} else if (behavior == CLIENT) {
+					/* received something from TCP remote SERVER proxy; send to app as from server */
+					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
+						perror("TCP proxy: no message received from REMOTE proxy\n");
+					} else {
+						printf ("TCP DATA: from [REMOTE: %d] - %d bytes\n", ntohs(tcp_proxy_to_proxy_sock.sin_port), rc);
+						if (sendto(tcp_proxy_to_app_client_socket, buff, strlen(buff), 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != (ssize_t)strlen(buff)) {
+							perror("TCP DATA: Cannot forward to [VNC]\n");
 						}
 						else {
-							printf("MGM: sent [PROXY MANAGER: %s] - %d bytes\n", buff, rc);
+							printf("TCP DATA: sent [VNC: %s] - %d bytes\n", buff, rc);
 						}
 						memset (buff, 0, MAX_PACKET_SIZE);
 					}
 				}
-				printf("\n");
-				fds[i].revents = 0;
-				//getchar();
-			}
+// done till here
+			} else if (i == 7) {
+				/* received something from VNC server/client */
+				if (behavior == SERVER) {
+					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
+						perror("TCP proxy: no message received from VNC\n");
+					} else {
+						printf ("TCP DATA: from [VNC: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
+						if (tcp_proxy_to_proxy_client_socket != -1) {
+							if (sendto(tcp_proxy_to_proxy_client_socket, buff, strlen(buff), 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_len)) != (ssize_t)strlen(buff)) {
+								perror("TCP DATA: Cannot forward to [VNC]\n");
+							}
+							else {
+								printf("TCP DATA: sent [VNC: %s] - %d bytes\n", buff, rc);
+							}
+						}
+						memset (buff, 0, MAX_PACKET_SIZE);
+					}
+				} else if (behavior == CLIENT) {
+					/* VNC client tries to connect to our TCP proxy */
+					if (tcp_proxy_to_app_client_socket != -1) {
+						perror("Another localhost VNC client tries to connect to TCP proxy server\n");
+					} else {
+						tcp_proxy_to_app_client_socket = accept(vnc_proxy->proxy_to_app_socket, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len);
+						if (tcp_proxy_to_app_client_socket == -1) {
+							perror("TCP: Accept returned an error\n");
+						}
+						/* add socket to fds */
+						num_fds++;
+						fds[8].fd = tcp_proxy_to_app_client_socket;
+						fds[8].events = POLLIN;
+						fds[8].revents = 0;
+					}
+				}
+			} else if (i == 8) {
+				if (behavior == SERVER) {
+					/* get something from remote TCP client proxy */
+					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
+						perror("TCP proxy Server: no message received\n");
 
+						/* remove the socket */
+						close(fds[i].fd);
+						tcp_proxy_to_proxy_client_socket = -1;
+						num_fds--;
+
+					} else {
+						/* received something from remote via TCP; send to TCP appl */
+						printf ("TCP DATA: from [REMOTE: %d] - %d bytes\n", ntohs(tcp_proxy_to_proxy_sock.sin_port), rc);
+
+						if (sendto(vnc_proxy->proxy_to_app_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != rc) {
+							perror("TCP proxy Server: Cannot forward vnc data packet\n");
+						} else
+							printf("TCP DATA: sent [VNC server] - %d bytes\n", rc);
+
+						memset(buff, 0, MAX_PACKET_SIZE);
+					}
+				} else if (behavior == CLIENT) {
+					/* got something from localhost VNC client */
+					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
+						perror("TCP VNC client: no message received\n");
+
+						/* remove the socket */
+						close(fds[i].fd);
+						tcp_proxy_to_app_client_socket = -1;
+						num_fds--;
+					} else {
+						/* received something from remote via TCP; send to TCP appl */
+						printf ("TCP DATA: from [VNC client: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
+
+						if (sendto(vnc_proxy->proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_sock)) != rc) {
+							perror("TCP proxy Server: Cannot forward vnc data packet\n");
+						} else
+							printf("TCP DATA: sent [VNC client] - %d bytes\n", rc);
+
+						memset(buff, 0, MAX_PACKET_SIZE);
+					}
+				}
+			}
+#if 0
+				else if (i == 7) {
+				/* got something from VNC */
+				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) < 0) {
+					perror("TCP proxy VNC: no message received\n");
+				} else {
+					/* received something from application, send further to TCP remote proxy */
+					printf ("TCP DATA: from [VNC: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
+
+					/* send to remote TCP proxy; */
+					if (tcp_proxy_to_proxy_client_socket == -1) {
+						/* I am a TCP client */
+
+						/* connect to remote TCP proxy server */
+
+
+						if (sendto(vnc_proxy->proxy_to_app_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != rc) {
+							perror("TCP proxy Server: Cannot forward vnc data packet\n");
+						} else
+							printf("TCP DATA: sent [VNC] - %d bytes\n", rc);
+					}
+				}
+
+			}
+#endif
+			printf("\n");
+			fds[i].revents = 0;
+			//getchar();
 		}
 	}
 
@@ -285,6 +485,7 @@ run_proxy(
 
 	printf("Exiting...\n");
 	free(buff);
+	free(fds);
 
 	return 0;
 

@@ -14,19 +14,16 @@
 
 int
 init(
-		int *proxy_to_proxy_socket,
-		int *proxy_to_linphone_socket,
-		int *proxy_to_proxy_data_socket,
-		int *proxy_to_linphone_data_socket,
+		struct udp_session *linphone_proxy,
+		struct tcp_session *vnc_proxy,
 		int *configure_socket,
 		char *remote_ip
 		);
 
 void
-release(int proxy_to_proxy_socket,
-		int proxy_to_linphone_socket,
-		int proxy_to_proxy_data_socket,
-		int proxy_to_linphone_data_socket,
+release(
+		struct udp_session *linphone_proxy,
+		struct tcp_session *vnc_proxy,
 		int configure_socket,
 		char *remote_ip
 		);

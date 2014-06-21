@@ -12,14 +12,12 @@
 
 #include <poll.h>
 
-#define LISTENING_SOCKETS 6	/* TODO - for now */
+#define LISTENING_SOCKETS 8	/* TODO - for now */
 
 int
 run_proxy(
-		int proxy_to_proxy_socket,
-		int proxy_to_linphone_socket,
-		int proxy_to_proxy_data_socket,
-		int proxy_to_linphone_data_socket,
+		struct udp_session *linphone_proxy,
+		struct tcp_session *vnc_proxy,
 		int configure_socketfd,
 		char *remote_ip);
 
