@@ -2,6 +2,8 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/time.h>
+
 
 #include "includes/util.h"
 #include "includes/parse.h"
@@ -37,7 +39,6 @@ static struct pollfd fds[NUM_FDS];
 
 static inline void migrate_init();
 static inline void migrate_establish();
-static inline void migrate_close();
 static inline void migrate_redirect();
 
 static char bye[] =
@@ -51,6 +52,24 @@ static char bye[] =
 "Max-Forwards: 70\r\n"
 "User-Agent: Linphone/3.3.2 (eXosip2/3.3.0)\r\n"
 "Content-Length: 0\r\n";
+
+static inline void gettimeofday_safe(struct timeval *t)
+{
+	int rc = gettimeofday(t, NULL);
+	DIE(-1 == rc, "gettimeofday");
+}
+
+static inline void time_diff(struct timeval *t1, struct timeval *t2,
+		struct timeval *dt)
+{
+	if (t2->tv_usec < t1->tv_usec) {
+		dt->tv_usec = 1000000 - (t1->tv_usec - t2->tv_usec);
+		dt->tv_sec = t2->tv_sec - t1->tv_sec - 1;
+	} else {
+		dt->tv_usec = t2->tv_usec - t1->tv_usec;
+		dt->tv_sec = t2->tv_sec - t1->tv_sec;
+	}
+}
 
 int main(int argc, char *argv[])
 {
@@ -180,7 +199,9 @@ int main(int argc, char *argv[])
 static inline void migrate_init()
 {
 	char buffer[MAX_PACKET_SIZE];
+	struct timeval t1, t2, dt;
 
+	gettimeofday_safe(&t1);
 	eprintf("migrate to IP: #%s#\n", migrate_ip);
 	init_sockaddr(&migrate_addr, migrate_ip, MANAGER_PORT);
 
@@ -199,12 +220,22 @@ static inline void migrate_init()
 
 	recv_msg(manager_socket, &migrate_addr, buffer);
 	printf("\nreceived:\n%s\n", buffer);
+	gettimeofday_safe(&t2);
+
+	time_diff(&t1, &t2, &dt);
+	printf("time 1: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
 
 	init_sockaddr(&migrate_addr, remote_ip, MANAGER_PORT);
 	strcpy(buffer, "redirect: ");
 	strcat(buffer, migrate_ip);
+	gettimeofday_safe(&t1);
 	send_msg(manager_socket, &migrate_addr, buffer, strlen(buffer));
+	gettimeofday_safe(&t2);
 
+	time_diff(&t1, &t2, &dt);
+	printf("time 2: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
+
+	gettimeofday_safe(&t1);
 	get_data(out_ack.buffer, &ack_data);
 	memset(buffer, 0, MAX_PACKET_SIZE);
 	strcpy(buffer, bye);
@@ -214,7 +245,10 @@ static inline void migrate_init()
 	replace_all(buffer, "to_tag", ack_data.from_tag);
 	replace_all(buffer, "call_id", ack_data.call_id);
 	send_msg(proxy_to_linphone_socket, &proxy_to_linphone_addr, buffer, strlen(buffer));
+	gettimeofday_safe(&t2);
 
+	time_diff(&t1, &t2, &dt);
+	printf("time 3: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
 }
 
 static inline void migrate_establish()
