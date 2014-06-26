@@ -22,16 +22,16 @@ main(int argc, char *argv[]) {
 
 	KICK(argc < 3, "incorrect usage\n"
 	"Usage:\n"
-	"./linphone_proxy <remote_ip> <client/server>\n");
+	"./session_proxy <remote_ip> <client/server>\n");
 	if (strcmp(argv[2], "server") == 0)
 		behavior = SERVER;
 	else if (strcmp(argv[2], "client") == 0)
 		behavior = CLIENT;
 	else KICK(argc < 3, "incorrect usage\n"
 			"Usage:\n"
-			"./linphone_proxy <remote_ip> <client/server>\n");
+			"./session_proxy <remote_ip> <client/server>\n");
 
-	puts("Linphone proxy started...");
+	puts("Session proxy started...");
 
 	rc = init(
 			&linphone_proxy,

@@ -40,6 +40,7 @@ run_proxy(
 	struct sockaddr_in udp_proxy_to_proxy_sock, udp_proxy_to_linphone_sock, udp_proxy_to_proxy_data_sock, udp_proxy_to_linphone_data_sock,
 		tcp_proxy_to_proxy_sock, tcp_proxy_to_app_sock, manager_sock, mirror_sock;
 	int tcp_proxy_to_proxy_client_socket = -1, tcp_proxy_to_app_client_socket = -1;
+	int connected = 0;
 
 	/* init UDP caller socket */
 	udp_proxy_to_proxy_len = sizeof(udp_proxy_to_proxy_sock);
@@ -90,10 +91,10 @@ run_proxy(
 		rc = listen(vnc_proxy->proxy_to_proxy_socket, 5);
 		if (rc < 0)
 			return_error("Failed to listen on the proxy-to-proxy TCP socket\n", rc);
-
+#if 0
 		/* connect to the VNC server */
 		printf("Trying to connect to the VNC server\n");
-		for (i = 1; i <= 10; i++) {
+		for (i = 1; i <= 5; i++) {
 			rc = connect(vnc_proxy->proxy_to_app_socket,  (struct sockaddr *) &tcp_proxy_to_app_sock, tcp_proxy_to_app_len);
 			if (!rc) {
 				printf("Connected to VNC server...\n");
@@ -102,13 +103,12 @@ run_proxy(
 			printf("Could not connect to VNC server Retrying %d ...\n", i);
 			sleep(3);
 		}
+#endif
 
-		if (i == 11)
-			return_error("Failed to connect to VNC server\n", -1);
 	} else if (behavior == CLIENT) {
 		/* act as a CLIENT and CONNECT to TCP remove SERVER */
-
-		for (i = 1; i <= 10; i++) {
+#if 0
+		for (i = 1; i <= 5; i++) {
 			rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
 			if (!rc) {
 				printf("Connected to Remote TCP proxy...\n");
@@ -118,8 +118,7 @@ run_proxy(
 			sleep(3);
 		}
 
-		if (i == 11)
-			return_error("Failed to connect to Remote TCP proxy server\n", -1);
+#endif
 
 		/* Act as server for the localhost VNC client */
 		/* listen on the proxy-to-app socket for incomming connections from VNC client */
@@ -171,11 +170,17 @@ run_proxy(
 	fds[5].events = POLLIN;
 	fds[5].revents = 0;
 
-	fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+	if (behavior == SERVER)
+		fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+	else if (behavior == CLIENT)
+		fds[6].fd = -1;
 	fds[6].events = POLLIN;
 	fds[6].revents = 0;
 
-	fds[7].fd = vnc_proxy->proxy_to_app_socket;
+	if (behavior == CLIENT)
+		fds[7].fd = vnc_proxy->proxy_to_app_socket;
+	else if (behavior == SERVER)
+		fds[7].fd = -1;
 	fds[7].events = POLLIN;
 	fds[7].revents = 0;
 
@@ -356,14 +361,35 @@ run_proxy(
 						fds[8].fd = tcp_proxy_to_proxy_client_socket;
 						fds[8].events = POLLIN;
 						fds[8].revents = 0;
+						printf("A remote proxy has connected to us via TCP\n");
+						if (!connected) {
+							/* time to connect to the VNC server */
+							printf("Trying to connect to the VNC server\n");
+							for (i = 1; i <= 5; i++) {
+								rc = connect(vnc_proxy->proxy_to_app_socket, (struct sockaddr *) &tcp_proxy_to_app_sock, tcp_proxy_to_app_len);
+								if (!rc) {
+									printf("Connected to VNC server...\n");
+									fds[7].fd = vnc_proxy->proxy_to_app_socket;
+									connected = 1;
+									break;
+								}
+								printf("Could not connect to VNC server Retrying %d ...\n", i);
+								sleep(3);
+							}
+						}
 					}
 				} else if (behavior == CLIENT) {
 					/* received something from TCP remote SERVER proxy; send to app as from server */
 					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
 						perror("TCP proxy: no message received from REMOTE proxy\n");
+						if (rc == 0) {
+							close(fds[i].fd);
+							fds[6].fd = -1;
+							connected = 0;
+						}
 					} else {
 						printf ("TCP DATA: from [REMOTE: %d] - %d bytes\n", ntohs(tcp_proxy_to_proxy_sock.sin_port), rc);
-						if (sendto(tcp_proxy_to_app_client_socket, buff, strlen(buff), 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != (ssize_t)strlen(buff)) {
+						if (sendto(tcp_proxy_to_app_client_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != rc) {
 							perror("TCP DATA: Cannot forward to [VNC]\n");
 						}
 						else {
@@ -372,16 +398,20 @@ run_proxy(
 						memset (buff, 0, MAX_PACKET_SIZE);
 					}
 				}
-// done till here
 			} else if (i == 7) {
 				/* received something from VNC server/client */
 				if (behavior == SERVER) {
 					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
 						perror("TCP proxy: no message received from VNC\n");
+						if (rc == 0) {
+							close(fds[i].fd);
+							fds[7].fd = -1;
+							connected = 0;
+						}
 					} else {
 						printf ("TCP DATA: from [VNC: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
 						if (tcp_proxy_to_proxy_client_socket != -1) {
-							if (sendto(tcp_proxy_to_proxy_client_socket, buff, strlen(buff), 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_len)) != (ssize_t)strlen(buff)) {
+							if (sendto(tcp_proxy_to_proxy_client_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_len)) != rc) {
 								perror("TCP DATA: Cannot forward to [VNC]\n");
 							}
 							else {
@@ -404,6 +434,22 @@ run_proxy(
 						fds[8].fd = tcp_proxy_to_app_client_socket;
 						fds[8].events = POLLIN;
 						fds[8].revents = 0;
+						printf("VNC client connected\n");
+						if (!connected) {
+							/* act as a CLIENT and CONNECT to TCP remove SERVER */
+
+							for (i = 1; i <= 5; i++) {
+								rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
+								if (!rc) {
+									printf("Connected to Remote TCP proxy...\n");
+									connected = 1;
+									fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+									break;
+								}
+								printf("Could not connect to Remote TCP proxy Retrying %d ...\n", i);
+								sleep(3);
+							}
+						}
 					}
 				}
 			} else if (i == 8) {
@@ -415,6 +461,7 @@ run_proxy(
 						/* remove the socket */
 						close(fds[i].fd);
 						tcp_proxy_to_proxy_client_socket = -1;
+						fds[i].fd = -1;
 						num_fds--;
 
 					} else {
@@ -436,6 +483,7 @@ run_proxy(
 						/* remove the socket */
 						close(fds[i].fd);
 						tcp_proxy_to_app_client_socket = -1;
+						fds[i].fd = -1;
 						num_fds--;
 					} else {
 						/* received something from remote via TCP; send to TCP appl */
@@ -482,7 +530,10 @@ run_proxy(
 	}
 
 	out:
-
+	if (tcp_proxy_to_app_client_socket != -1)
+		close(tcp_proxy_to_app_client_socket);
+	if (tcp_proxy_to_proxy_client_socket != -1)
+		close(tcp_proxy_to_proxy_client_socket);
 	printf("Exiting...\n");
 	free(buff);
 	free(fds);

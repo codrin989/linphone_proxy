@@ -50,6 +50,7 @@ add_udp_iptables_rule(
 
 static int
 add_tcp_iptables_rule(
+		enum behavior_type btype,
 		const char operation,
 		const char * type,
 		const char * intf,
@@ -68,7 +69,10 @@ add_tcp_iptables_rule(
 			sprintf(buff, "iptables -t nat -%c %s -i %s -p tcp --dport %d -j REDIRECT --to-port %d", operation, type, intf, dest_port, red_to_port);
 	}
 	else if (strcmp (type, "OUTPUT") == 0) {
-		sprintf(buff, "iptables -t nat -%c %s -p tcp -d %s --dport %d -j DNAT --to 127.0.0.1:%d", operation, type, target_ip, dest_port, red_to_port);
+		if (btype == CLIENT)
+			sprintf(buff, "iptables -t nat -%c %s -p tcp -d %s --dport %d -j DNAT --to 127.0.0.1:%d", operation, type, target_ip, dest_port, red_to_port);
+		else if (btype == SERVER)
+			sprintf(buff, "iptables -t nat -%c %s -p tcp -d %s --sport %d -j DNAT --to 127.0.0.1:%d", operation, type, target_ip, dest_port, red_to_port);
 
 	}
 
@@ -77,11 +81,14 @@ add_tcp_iptables_rule(
 		return_error(buff, rc);
 
 	if (strcmp (type, "OUTPUT") == 0) {
-		sprintf(buff, "iptables -t nat -%c POSTROUTING -p tcp -d %s --sport %d -j SNAT --to-source %s:%d", operation, CALLER_IP, red_to_port, target_ip, dest_port);
+		if (btype == CLIENT) {
+			sprintf(buff, "iptables -t nat -%c POSTROUTING -p tcp -d %s --sport %d -j SNAT --to-source %s:%d", operation, "127.0.0.1", red_to_port, target_ip, dest_port);
+			rc = system(buff);
+			if (rc == -1)
+				return_error(buff, rc);
+		}
 	}
-	rc = system(buff);
-	if (rc == -1)
-		return_error(buff, rc);
+
 
 	return rc;
 }
@@ -242,8 +249,18 @@ init_tcp(
 
 	/* we only add filter for client */
 	if (behavior == CLIENT) {
-		/* redirect packets from VNC through proxy */
-		i = add_tcp_iptables_rule('A', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
+		/* redirect packets from VNC client through proxy */
+		i = add_tcp_iptables_rule(CLIENT, 'A', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
+		if (i == -1) {
+			vnc_proxy->proxy_to_app_port = -1; /* no need to delete the iptable rule; delete the one before */
+			return_error("could not add the TCP iptables rule", i);
+		}
+	}
+	else if (behavior == SERVER) {
+		/* SNAT the Source IP and the Source Port, to make VNC server
+		 * think that a real VNC client connected to him */
+
+		i = add_tcp_iptables_rule(SERVER, 'A', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
 		if (i == -1) {
 			vnc_proxy->proxy_to_app_port = -1; /* no need to delete the iptable rule; delete the one before */
 			return_error("could not add the TCP iptables rule", i);
@@ -279,7 +296,7 @@ init(
 	rc = init_udp(linphone_proxy, remote_ip);
 	if (rc < 0) {
 		release(linphone_proxy, vnc_proxy, *configure_socket, remote_ip);
-		exit_error("Could not create proxy for linphone\n", EXIT_FAILURE);
+		exit_error("Could not create proxy for \n", EXIT_FAILURE);
 	}
 	printf ("UDP socket created for proxy-to-proxy setup traffic on port %d\n", linphone_proxy->proxy_to_proxy_port);
 	printf ("UDP socket created for proxy-to-linphone setup traffic on port %d\n", linphone_proxy->proxy_to_linphone_port);
@@ -292,7 +309,7 @@ init(
 		exit_error("Could not create proxy for vnc\n", EXIT_FAILURE);
 	}
 	printf ("TCP socket created for proxy-to-proxy setup traffic on port %d\n", vnc_proxy->proxy_to_proxy_port);
-	printf ("TCP socket created for proxy-to-linphone setup traffic on port %d\n", vnc_proxy->proxy_to_app_port);
+	printf ("TCP socket created for proxy-to-vnc setup traffic on port %d\n", vnc_proxy->proxy_to_app_port);
 
 	return 0;
 }
@@ -382,13 +399,34 @@ release_tcp(struct tcp_session *vnc_proxy, char *remote_ip)
 	}
 #endif
 
-
+#if 0
 	if (vnc_proxy->proxy_to_app_port != -1) {
 		rc = add_tcp_iptables_rule('D', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
 		if (rc == -1)
 			printf ("could not delete rule TCP from iptables\n");
 		vnc_proxy->proxy_to_app_port = -1;
 	}
+#endif
+	if (vnc_proxy->proxy_to_app_port != -1) {
+		if (behavior == CLIENT) {
+			/* redirect packets from VNC client through proxy */
+			rc = add_tcp_iptables_rule(CLIENT, 'D', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
+			if (rc == -1)
+				return_error("could not remove the TCP iptables rule", rc);
+			vnc_proxy->proxy_to_app_port = -1;
+		}
+		else if (behavior == SERVER) {
+			/* SNAT the Source IP and the Source Port, to make VNC server
+			 * think that a real VNC client connected to him */
+
+			rc = add_tcp_iptables_rule(SERVER, 'D', "OUTPUT","lo", 1, remote_ip, VNC_TCP_PORT, vnc_proxy->proxy_to_app_port);
+			if (rc == -1)
+				return_error("could not remove the TCP iptables rule", rc);
+			vnc_proxy->proxy_to_app_port = -1;
+		}
+	}
+
+
 	printf("Removed filters for TCP\n");
 }
 
