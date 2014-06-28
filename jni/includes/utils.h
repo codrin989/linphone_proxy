@@ -13,6 +13,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
+
+#define true	1
+#define false	0
+
 #define START_PORT_NO_INCOMING 			50606
 #define START_PORT_NO_FORWARDING 		50616
 #define START_PORT_NO_DATA_INCOMING		51786

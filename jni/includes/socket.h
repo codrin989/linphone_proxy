@@ -30,7 +30,6 @@ struct inet_tcp_sk_desc {
 
 	int rfd;
 	int cpt_reuseaddr;
-	struct list_head rlist;
 };
 
 struct tcp_server_repair
@@ -69,6 +68,9 @@ listen_socket(int sockfd);
 
 int
 socket_type_get(int sockfd);
+
+int
+tcp_state_get(int sockfd);
 
 int
 tcp_repair_socket_get(int sockfd, struct tcp_server_repair *repair);
