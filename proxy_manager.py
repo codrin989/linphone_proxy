@@ -35,8 +35,8 @@ if len(sys.argv) < 3:
 	sys.exit(1)
 
 vnc_pid = sys.argv[1]
-#trudy_ip = sys.argv[2]
-trudy_ip = "localhost"
+trudy_ip = sys.argv[2]
+#trudy_ip = "localhost"
 local_addr = ("localhost", PROXY_PORT)
 remote_addr = (trudy_ip, PROXY_PORT)
 
@@ -56,6 +56,7 @@ create_dir("images/0")
 create_dir("images/1")
 create_dir("images/2")
 create_dir("images/3")
+create_dir("images/4")
 
 sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/0 --tcp-established --leave-running --track-mem")
 sys_cmd("scp -r images codrin@" + trudy_ip + ":~")
@@ -103,7 +104,7 @@ if not msg.startswith("Ack"):
 	sys.exit(1)
 """
 
-sys_cmd("ssh codrin@" + remote_addr +" 'criu restore --images-dir ~/images/4 --tcp-established -d'")
+sys_cmd("ssh codrin@" + trudy_ip +" 'sudo criu restore --images-dir ~/images/4 --tcp-established -d'")
 
 """
 s.sendto("IP: " + trudy_ip, remote_addr)
