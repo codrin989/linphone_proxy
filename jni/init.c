@@ -426,7 +426,6 @@ release_tcp(struct tcp_session *vnc_proxy, char *remote_ip)
 		}
 	}
 
-
 	printf("Removed filters for TCP\n");
 }
 
