@@ -18,7 +18,7 @@ typedef enum {
 }state;
 
 typedef enum {
-	NONE = 0,		/* proxy acts normally forwarding data between a socket and another */
+	NORMAL = 0,		/* proxy acts normally forwarding data between a socket and another */
 	STOPPED,		/* proxy no longer reads/forwards packets from sockets */
 }tcp_state;
 
@@ -164,7 +164,7 @@ run_proxy(
 	fds[7].events = POLLIN;
 	fds[7].revents = 0;
 
-	tcp_proxy_state = NONE;
+	tcp_proxy_state = NORMAL;
 	while (1) {
 		if (poll(fds, num_fds, -1) == -1)
 			exit_error("poll error", EXIT_FAILURE);
@@ -258,6 +258,7 @@ run_proxy(
 					}
 				}
 			}
+#if 0
 			else if(i == 4) {	/* data packet to another caller */
 				if (proxy_state == NONE)
 					printf ("ERR: INTERCEPTING is not possible without INITIATION\n");
@@ -280,6 +281,7 @@ run_proxy(
 					}
 				}
 			}
+#endif
 			else if(i == 5) { /* packet from manager */
 				if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &manager_sock, &manager_len)) < 0) {
 					perror("CONFIGURE: no message received\n");
@@ -316,7 +318,7 @@ run_proxy(
 #endif
 					}
 					if (strcmp(buff, "Stop") == 0) {
-						if (tcp_proxy_state != NONE) {
+						if (tcp_proxy_state != NORMAL) {
 							strcpy(buff, "Nack");
 							goto __answer;
 						}
@@ -325,7 +327,7 @@ run_proxy(
 						if (behavior == SERVER) {
 							/* tell the other proxy to stop first */
 							manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
-							strcmp(buff, "Stop");
+							strcpy(buff, "Stop");
 							goto __answer;
 						} else if (behavior == CLIENT) {
 							/* stop reading data from application */
