@@ -469,6 +469,15 @@ __no_answer:
 							}
 							memset (buff, 0, MAX_PACKET_SIZE);
 							/* TODO: send the TCP repair structure */
+							struct inet_tcp_sk_desc app_sock_descr;
+							app_sock_descr.family = AF_INET;
+							app_sock_descr.type = socket_type_get(vnc_proxy->proxy_to_app_socket);
+							app_sock_descr.state = tcp_state_get(vnc_proxy->proxy_to_app_socket);
+
+__repair_out:
+							printf("TCP repaired\n");
+							/* do nothing */
+
 						}
 					}
 
