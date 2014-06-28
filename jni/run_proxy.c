@@ -38,13 +38,13 @@ run_proxy(
 	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", linphone_proxy->proxy_to_proxy_port, linphone_proxy->proxy_to_proxy_data_port);
 	int rc, num_fds = LISTENING_SOCKETS, i;
 	unsigned int udp_proxy_to_proxy_len, udp_proxy_to_linphone_len, udp_proxy_to_proxy_data_len,
-		udp_proxy_to_linphone_data_len, manager_len, mirror_len, tcp_proxy_to_proxy_len, tcp_proxy_to_app_len;
+		udp_proxy_to_linphone_data_len, manager_len, mirror_len, tcp_proxy_to_proxy_len, tcp_proxy_to_app_len, configure_len;
 	char *buff = malloc(MAX_PACKET_SIZE), *mirror_ip;
 
 	/* keep an extra one when acting as a client on the TCP side */
 	struct pollfd *fds = malloc ((num_fds + 1)* sizeof(struct pollfd));
 	struct sockaddr_in udp_proxy_to_proxy_sock, udp_proxy_to_linphone_sock, udp_proxy_to_proxy_data_sock, udp_proxy_to_linphone_data_sock,
-		tcp_proxy_to_proxy_sock, tcp_proxy_to_app_sock, manager_sock, mirror_sock;
+		tcp_proxy_to_proxy_sock, tcp_proxy_to_app_sock, manager_sock, mirror_sock, configure_sock;
 	int tcp_proxy_to_proxy_client_socket = -1, tcp_proxy_to_app_client_socket = -1;
 	int connected = 0;
 
@@ -116,6 +116,13 @@ run_proxy(
 	manager_sock.sin_family = AF_INET;
 	manager_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
 	manager_sock.sin_port = htons(MANAGER_PORT);
+
+	/* init configure socket - used to communicate with other proxies */
+	configure_len = sizeof(configure_sock);
+	memset(&configure_sock, 0, configure_len);
+	configure_sock.sin_family = AF_INET;
+	configure_sock.sin_addr.s_addr = inet_addr(remote_ip);
+	configure_sock.sin_port = htons(CONFIGURE_PORT);
 
 /* This order of listener must be maintained
  * 0 - stdin
@@ -326,9 +333,14 @@ run_proxy(
 						//fds[7].fd = -1;
 						if (behavior == SERVER) {
 							/* tell the other proxy to stop first */
-							manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
 							strcpy(buff, "Stop");
-							goto __answer;
+							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_sock))) != (ssize_t)strlen(buff)) {
+								perror("CONFIGURE: Cannot send command to [REMOTE PROXY]\n");
+							}
+							else {
+								printf("MGM: sent [REMOTE PROXY: %s] - %d bytes\n", buff, rc);
+							}
+							goto __no_answer;
 						} else if (behavior == CLIENT) {
 							/* stop reading data from application */
 							tcp_proxy_state = STOPPED;
@@ -350,6 +362,8 @@ run_proxy(
 						}
 
 						/* Ack may only be received after a Stop commands has been sent */
+
+						/* time for server to stop */
 						tcp_proxy_state = STOPPED;
 
 					} else {
@@ -448,10 +462,10 @@ __no_answer:
 							/* let the server know it */
 							manager_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
 							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock))) != (ssize_t)strlen(buff)) {
-								perror("CONFIGURE: Cannot answer to [LOCAL PROXY MANAGER]\n");
+								perror("CONFIGURE: Cannot answer to [PROXY MANAGER]\n");
 							}
 							else {
-								printf("MGM: sent [LOCAL PROXY MANAGER: %s] - %d bytes\n", buff, rc);
+								printf("MGM: sent [PROXY MANAGER: %s] - %d bytes\n", buff, rc);
 							}
 							memset (buff, 0, MAX_PACKET_SIZE);
 							/* TODO: send the TCP repair structure */
@@ -538,8 +552,8 @@ __no_answer:
 							fds[8].fd = -1;
 							strcpy(buff, "Ack");
 							/* let the server know it */
-							manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
-							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock))) != (ssize_t)strlen(buff)) {
+							//manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
+							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_len))) != (ssize_t)strlen(buff)) {
 								perror("CONFIGURE: Cannot answer to [REMOTE PROXY MANAGER]\n");
 							}
 							else {
