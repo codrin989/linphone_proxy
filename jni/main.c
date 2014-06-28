@@ -76,6 +76,8 @@ int main(int argc, char *argv[])
 	char buffer[MAX_PACKET_SIZE];
 	static struct sockaddr_in addr;
 	int rc, i, count;
+	struct timeval t1, t2, dt;
+
 
 	KICK(argc < 3, "incorrect usage\n"
 	"Usage:\n"
@@ -131,38 +133,55 @@ int main(int argc, char *argv[])
 
 			/* receive SIP packet from linphone */
 			case 1:
+				gettimeofday_safe(&t1);
 				count = recv_msg(fds[i].fd, &proxy_to_linphone_addr, buffer);
 
 				if (begins_with(buffer, "INVITE")) {
 					copy_packet(&out_invite, buffer, count);
-					printf("captured INVITE packet:\n%s\n", out_invite.buffer);
+					//printf("captured INVITE packet:\n%s\n", out_invite.buffer);
 				} else if (begins_with(buffer, "ACK")) {
 					copy_packet(&out_ack, buffer, count);
-					printf("captured ACK packet:\n%s\n", out_ack.buffer);
+					//printf("captured ACK packet:\n%s\n", out_ack.buffer);
 				} else if (strstr(buffer, "200 OK") && strstr(buffer, "OPTIONS" )) {
 					copy_packet(&out_op_ok, buffer, count);
-					printf("captured OPTIONS OK packet:\n%s\n", out_op_ok.buffer);
+					//printf("captured OPTIONS OK packet:\n%s\n", out_op_ok.buffer);
 				}
 
 				send_msg(proxy_to_proxy_socket, &proxy_to_proxy_addr, buffer, count);
+				gettimeofday_safe(&t2);
+				time_diff(&t1, &t2, &dt);
+				printf("time case 1: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
+
 				break;
 
 			/* receive SIP packet from proxy */
 			case 2:
+				gettimeofday_safe(&t1);
 				count = recv_msg(fds[i].fd, &addr, buffer);
 				send_msg(proxy_to_linphone_socket, &proxy_to_linphone_addr, buffer, count);
+				gettimeofday_safe(&t2);
+				time_diff(&t1, &t2, &dt);
+				printf("time case 2: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
 				break;
 
 			/* receive data packet from linphone */
 			case 3:
+				gettimeofday_safe(&t1);
 				count = recv_msg(fds[i].fd, &proxy_to_linphone_data_addr, buffer);
 				send_msg(proxy_to_proxy_data_socket, &proxy_to_proxy_data_addr, buffer, count);
+				gettimeofday_safe(&t2);
+				time_diff(&t1, &t2, &dt);
+				printf("time case 3: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
 				break;
 
 			/* receive data packet from proxy */
 			case 4:
+				gettimeofday_safe(&t1);
 				count = recv_msg(fds[i].fd, &addr, buffer);
 				send_msg(proxy_to_linphone_data_socket, &proxy_to_linphone_data_addr, buffer, count);
+				gettimeofday_safe(&t2);
+				time_diff(&t1, &t2, &dt);
+				printf("time case 4: %lu.%06lu\n", dt.tv_sec, dt.tv_usec);
 				break;
 
 			/* receive command from manager */
