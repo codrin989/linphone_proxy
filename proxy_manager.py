@@ -60,13 +60,13 @@ create_dir("images/3")
 sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/0 --tcp-established --leave-running --track-mem")
 sys_cmd("scp -r images codrin@" + trudy_ip + ":~")
 
-sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/1 --tcp-established --leave-running --track-mem --prev-images-dir images/0")
+sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/1 --tcp-established --leave-running --track-mem --prev-images-dir ../0")
 sys_cmd("scp -r images/1 codrin@" + trudy_ip + ":~/images")
 
-sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/2 --tcp-established --leave-running --track-mem --prev-images-dir images/1")
+sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/2 --tcp-established --leave-running --track-mem --prev-images-dir ../1")
 sys_cmd("scp -r images/2 codrin@" + trudy_ip + ":~/images")
 
-sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/3 --tcp-established --leave-running --track-mem --prev-images-dir images/2")
+sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/3 --tcp-established --leave-running --track-mem --prev-images-dir ../2")
 sys_cmd("scp -r images/3 codrin@" + trudy_ip + ":~/images")
 
 """
@@ -89,7 +89,7 @@ if not n == STRUCT_SIZE:
 	sys.exit(1)
 """
 
-sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/4 --tcp-established --track-mem --prev-images-dir images/3")
+sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/4 --tcp-established --track-mem --prev-images-dir ../3")
 sys_cmd("scp -r images/4 codrin@" + trudy_ip + ":~/images")
 
 """
