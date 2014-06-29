@@ -12,7 +12,7 @@
 
 #include <poll.h>
 
-#define LISTENING_SOCKETS 8	/* TODO - for now */
+#define LISTENING_SOCKETS 9	/* TODO - for now */
 
 int
 run_proxy(

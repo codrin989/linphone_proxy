@@ -42,7 +42,7 @@ run_proxy(
 	char *buff = malloc(MAX_PACKET_SIZE), *mirror_ip;
 
 	/* keep an extra one when acting as a client on the TCP side */
-	struct pollfd *fds = malloc ((num_fds + 1)* sizeof(struct pollfd));
+	struct pollfd *fds = malloc (num_fds* sizeof(struct pollfd));
 	struct sockaddr_in udp_proxy_to_proxy_sock, udp_proxy_to_linphone_sock, udp_proxy_to_proxy_data_sock, udp_proxy_to_linphone_data_sock,
 		tcp_proxy_to_proxy_sock, tcp_proxy_to_app_sock, manager_sock, mirror_sock, configure_sock;
 	int tcp_proxy_to_proxy_client_socket = -1, tcp_proxy_to_app_client_socket = -1;
@@ -170,6 +170,11 @@ run_proxy(
 		fds[7].fd = -1;
 	fds[7].events = POLLIN;
 	fds[7].revents = 0;
+
+	/* Will be completed later */
+	fds[8].fd = -1;
+	fds[8].events = POLLIN;
+	fds[8].revents = 0;
 
 	tcp_proxy_state = NORMAL;
 	while (1) {
@@ -354,17 +359,147 @@ run_proxy(
 						}
 					}
 
-					if (strcmp(buff, "Ack")) {
+					if (strcmp(buff, "Ack") == 0) {
 						/* only server may receive ACKs */
 						if (behavior != SERVER) {
 							strcpy(buff, "unknown command");
 							goto __answer;
 						}
 
-						/* Ack may only be received after a Stop commands has been sent */
+						/* Ack may only be received after a Stop command of after a redirect command */
 
 						/* time for server to stop */
-						tcp_proxy_state = STOPPED;
+						if (tcp_proxy_state == STOPPED) {
+							/* command was after IP redirect */
+							/* nothing for server to do; send proxy manager ACK */
+							goto __answer;
+						} else {
+							/* command was after STOP */
+							tcp_proxy_state = STOPPED;
+						}
+
+					} else if (strcmp(buff, "TCP repair") == 0) {
+						if (behavior == CLIENT) {
+							/* unknown command */
+							strcpy(buff, "unknown command");
+							goto __answer;
+						} else if (behavior == SERVER) {
+							/* need to repair the TCP socket connected to the server */
+							struct inet_tcp_sk_desc app_sock_descr;
+							app_sock_descr.rfd = vnc_proxy->proxy_to_app_socket;
+							app_sock_descr.family = AF_INET;
+							app_sock_descr.type = socket_type_get(vnc_proxy->proxy_to_app_socket);
+							app_sock_descr.state = tcp_state_get(vnc_proxy->proxy_to_app_socket);
+							app_sock_descr.src_port = vnc_proxy->proxy_to_app_port;
+							app_sock_descr.src_addr[0] = (INADDR_ANY & 0xFF000000) >> 24;
+							app_sock_descr.src_addr[1] = (INADDR_ANY & 0x00FF0000) >> 16;
+							app_sock_descr.src_addr[2] = (INADDR_ANY & 0x0000FF00) >> 8;
+							app_sock_descr.src_addr[3] = (INADDR_ANY & 0x000000FF);
+							close(vnc_proxy->proxy_to_app_socket);
+
+							if ((vnc_proxy->proxy_to_proxy_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
+									perror("cannot create TCP repair proxy-to-app socket: ");
+
+							if (restore_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr, &tcp_proxy_to_app_sock, tcp_proxy_to_app_len)) {
+								printf("ERROR: failed to dump TCP repair state\n");
+							}
+
+							printf("Restored TCP connection\n");
+							/* send an ack */
+							strcpy(buff, "Ack");
+							goto __answer;
+						} else {
+							printf("Unknown behavior found\n");
+							strcpy(buff, "unknown command");
+							goto __answer;
+						}
+					} else if (strstr(buff, "IP: ") == buff) {
+
+						/* command to redirect */
+						if (behavior == SERVER) {
+							/* send to CLIENT; nothing to do for the SERVER */
+							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_sock))) != (ssize_t)strlen(buff)) {
+								perror("CONFIGURE: Cannot send command to [REMOTE PROXY]\n");
+							}
+							else {
+								printf("MGM: sent [REMOTE PROXY: %s] - %d bytes\n", buff, rc);
+							}
+							goto __no_answer;
+						}
+
+						if (behavior == CLIENT) {
+							/* time to redirect */
+
+							if (tcp_proxy_state != STOPPED) {
+								printf("I am not stopped, and you want me to redirect. Are you sure??\n");
+							}
+
+							/* close the initial socket */
+							close(vnc_proxy->proxy_to_proxy_socket);
+							connected = 0;
+
+							/* create a new socket to the new ip */
+							vnc_proxy->proxy_to_proxy_socket = -1;
+							if ((vnc_proxy->proxy_to_proxy_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
+								perror("cannot create new TCP proxy-to-proxy socket: ");
+							rc = -1;
+							rc = bind_socket(
+									vnc_proxy->proxy_to_proxy_socket,
+									AF_INET,
+									START_PORT_NO_TCP_INCOMMING);
+							if (rc < 0)
+								perror("cannot bind new TCP proxy-to-proxy socket: ");
+
+							vnc_proxy->proxy_to_proxy_port = START_PORT_NO_TCP_INCOMMING;
+
+							/* init new TCP caller socket */
+							printf("Creating new socket for proxy to proxy communication, with IP: %s\n", buff + strlen("IP: "));
+							tcp_proxy_to_proxy_len = sizeof(tcp_proxy_to_proxy_sock);
+							memset(&tcp_proxy_to_proxy_sock, 0, tcp_proxy_to_proxy_len);
+							tcp_proxy_to_proxy_sock.sin_family = AF_INET;
+							tcp_proxy_to_proxy_sock.sin_addr.s_addr = inet_addr(buff + strlen("IP: "));
+							tcp_proxy_to_proxy_sock.sin_port = htons(vnc_proxy->proxy_to_proxy_port);
+
+							/* connect to the new ip */
+							for (i = 1; i <= 5; i++) {
+								rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
+								if (!rc) {
+									printf("Connected to new Remote TCP proxy %s...\n", buff + strlen("IP: "));
+									connected = 1;
+									fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+									break;
+								}
+								printf("Could not connect to new %s Remote TCP proxy Retrying %d ...\n", buff + strlen("IP: "), i);
+								sleep(3);
+							}
+
+							/* restart listening from the VNC client */
+							fds[8].fd = tcp_proxy_to_proxy_client_socket;
+							strcpy(buff, "Ack");
+							/* let the server know it */
+							//manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
+							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_len))) != (ssize_t)strlen(buff)) {
+								perror("CONFIGURE: Cannot answer to [REMOTE PROXY MANAGER]\n");
+							}
+							else {
+								printf("MGM: sent [REMOTE PROXY MANAGER: %s] - %d bytes\n", buff, rc);
+							}
+							memset (buff, 0, MAX_PACKET_SIZE);
+							goto __no_answer;
+						} else {
+							printf("Unknown behavior found\n");
+							strcpy(buff, "unknown command");
+							/* let the server know it */
+							//manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
+							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_len))) != (ssize_t)strlen(buff)) {
+								perror("CONFIGURE: Cannot answer to [REMOTE PROXY MANAGER]\n");
+							}
+							else {
+								printf("MGM: sent [REMOTE PROXY MANAGER: %s] - %d bytes\n", buff, rc);
+							}
+							memset (buff, 0, MAX_PACKET_SIZE);
+							goto __no_answer;
+						}
 
 					} else {
 						strcpy (buff, "unknown command");
@@ -390,7 +525,7 @@ __no_answer:
 							perror("TCP: Accept returned an error\n");
 						}
 						/* add socket to fds */
-						num_fds++;
+						//num_fds++;
 						fds[8].fd = tcp_proxy_to_proxy_client_socket;
 						fds[8].events = POLLIN;
 						fds[8].revents = 0;
@@ -457,10 +592,21 @@ __no_answer:
 						if (tcp_proxy_state == STOPPED) {
 							fds[7].fd = -1;
 
+							/* TODO: send the TCP repair structure */
+							struct inet_tcp_sk_desc app_sock_descr;
+							app_sock_descr.rfd = vnc_proxy->proxy_to_app_socket;
+							app_sock_descr.family = AF_INET;
+							app_sock_descr.type = socket_type_get(vnc_proxy->proxy_to_app_socket);
+							app_sock_descr.state = tcp_state_get(vnc_proxy->proxy_to_app_socket);
+							if (dump_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr)) {
+								printf("ERROR: failed to dump TCP repair state\n");
+							}
+
+							printf("TCP repaired\n");
+
 							/* let the proxy manager know it */
 							strcpy(buff, "Ack");
 							/* let the server know it */
-							manager_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
 							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &manager_sock, sizeof(manager_sock))) != (ssize_t)strlen(buff)) {
 								perror("CONFIGURE: Cannot answer to [PROXY MANAGER]\n");
 							}
@@ -468,17 +614,6 @@ __no_answer:
 								printf("MGM: sent [PROXY MANAGER: %s] - %d bytes\n", buff, rc);
 							}
 							memset (buff, 0, MAX_PACKET_SIZE);
-							/* TODO: send the TCP repair structure */
-							struct inet_tcp_sk_desc app_sock_descr;
-							app_sock_descr.rfd = vnc_proxy->proxy_to_app_socket;
-							app_sock_descr.family = AF_INET;
-							app_sock_descr.type = socket_type_get(vnc_proxy->proxy_to_app_socket);
-							app_sock_descr.state = tcp_state_get(vnc_proxy->proxy_to_app_socket);
-
-__repair_out:
-							printf("TCP repaired\n");
-							/* do nothing */
-
 						}
 					}
 
@@ -492,7 +627,7 @@ __repair_out:
 							perror("TCP: Accept returned an error\n");
 						}
 						/* add socket to fds */
-						num_fds++;
+						//num_fds++;
 						fds[8].fd = tcp_proxy_to_app_client_socket;
 						fds[8].events = POLLIN;
 						fds[8].revents = 0;
@@ -524,7 +659,13 @@ __repair_out:
 						close(fds[i].fd);
 						tcp_proxy_to_proxy_client_socket = -1;
 						fds[i].fd = -1;
-						num_fds--;
+						//num_fds--;
+
+						/*remove the socket to the VNC server */
+						//close(vnc_proxy->proxy_to_app_socket);
+						//vnc_proxy->proxy_to_app_socket = -1;
+						fds[7].fd = -1;
+						connected = 0;
 
 					} else {
 						/* received something from remote via TCP; send to TCP appl */
@@ -546,7 +687,13 @@ __repair_out:
 						close(fds[i].fd);
 						tcp_proxy_to_app_client_socket = -1;
 						fds[i].fd = -1;
-						num_fds--;
+						//num_fds--;
+
+						/*remove the socket to REMOTE proxy server */
+						//close(vnc_proxy->proxy_to_proxy_socket);
+						//vnc_proxy->proxy_to_proxy_socket = -1;
+						fds[6].fd = -1;
+						connected = 0;
 					} else {
 						/* received something from remote via TCP; send to TCP appl */
 						printf ("TCP DATA: from [VNC client: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);

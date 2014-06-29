@@ -10,21 +10,15 @@
 #include <netinet/tcp.h>
 #include <linux/sockios.h>
 #include <sys/ioctl.h>
-#include <stdint.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
-typedef uint64_t	u64;
-typedef int64_t		s64;
-typedef uint32_t	u32;
-typedef int32_t		s32;
-typedef uint16_t	u16;
-typedef int16_t		s16;
-typedef uint8_t		u8;
-typedef int8_t		s8;
+#include <limits.h>
 
 #define REPAIR_FILE "/tmp/proxy_tcp_repair.dmp"
+
+static int tcp_max_wshare = 2U << 20;
+static int tcp_max_rshare = 3U << 20;
 
 int
 write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_buf, char *out_buf)
@@ -70,7 +64,7 @@ write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_bu
 }
 
 int
-read_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_buf, char *out_buf)
+read_repair_socket(const char *file, struct tcp_server_repair *tse, char **in_buf, char **out_buf)
 {
 	int fd, rc;
 	char magic[4];
@@ -102,34 +96,34 @@ read_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_buf
 		return -1;
 	}
 
-	in_buf = malloc(tse->inq_len);
-	if (!in_buf) {
+	*in_buf = malloc(tse->inq_len);
+	if (!*in_buf) {
 		perror("Failed to alloc data\n");
 		close(fd);
 		return -1;
 	}
 
-	rc = read(fd, in_buf, tse->inq_len);
+	rc = read(fd, *in_buf, tse->inq_len);
 	if (rc != tse->inq_len) {
 		perror("Failed to read whole TCP receive structure\n");
 		close(fd);
-		free(in_buf);
+		free(*in_buf);
 		return -1;
 	}
 
-	out_buf = malloc(tse->outq_len);
+	*out_buf = malloc(tse->outq_len);
 	if (!out_buf ) {
 		perror("Failed to alloc data\n");
 		close(fd);
-		free(in_buf);
+		free(*in_buf);
 		return -1;
 	}
 
-	rc = read(fd, out_buf, tse->outq_len);
+	rc = read(fd, *out_buf, tse->outq_len);
 	if (rc != tse->outq_len) {
 		perror("Failed to write whole TCP send structure\n");
-		free(in_buf);
-		free(out_buf);
+		free(*in_buf);
+		free(*out_buf);
 		close(fd);
 		return -1;
 	}
@@ -156,6 +150,45 @@ do_getsockopt(int sk, int level, int name, void *val, int len)
 
 	return 0;
 }
+
+int
+do_setsockopt(int sk, int level, int name, void *val, int len)
+{
+	if (setsockopt(sk, level, name, val, len) < 0) {
+		perror("Can't setsockopt: ");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
+restore_prepare_socket(int sk)
+{
+	int flags;
+
+	/* In kernel a bufsize has type int and a value is doubled. */
+	u32 maxbuf = INT_MAX / 2;
+
+	if (do_setsockopt(sk, SOL_SOCKET, SO_SNDBUFFORCE, &maxbuf, sizeof(maxbuf)))
+		return -1;
+	if (do_setsockopt(sk, SOL_SOCKET, SO_RCVBUFFORCE, &maxbuf, sizeof(maxbuf)))
+		return -1;
+
+	/* Prevent blocking on restore */
+	flags = fcntl(sk, F_GETFL, 0);
+	if (flags == -1) {
+		perror("Unable to get flags for file descriptor: ");
+		return -1;
+	}
+	if (fcntl(sk, F_SETFL, flags | O_NONBLOCK) ) {
+		perror("Unable to set O_NONBLOCK for file descriptor: ");
+		return -1;
+	}
+
+	return 0;
+}
+
 
 int
 create_socket(int domain, int type) {
@@ -236,6 +269,17 @@ tcp_repair_on(int fd)
 	return ret;
 }
 
+static inline void
+tcp_repair_off(int fd)
+{
+	int aux = 0, ret;
+
+	ret = setsockopt(fd, SOL_TCP, TCP_REPAIR, &aux, sizeof(aux));
+	if (ret < 0)
+		perror("Failed to turn off repair mode on socket: ");
+	return;
+}
+
 static int
 refresh_inet_sk(struct inet_tcp_sk_desc *sk)
 {
@@ -243,7 +287,7 @@ refresh_inet_sk(struct inet_tcp_sk_desc *sk)
 	struct tcp_info info;
 
 	size = sizeof(info);
-	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_INFO, &info, &size)) {
+	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_INFO, &info, size)) {
 		perror("Failed to obtain TCP_INFO");
 		return -1;
 	}
@@ -333,7 +377,7 @@ tcp_stream_get_options(int sk, struct tcp_server_repair *tse)
 }
 
 static int
-tcp_repair_establised(int fd, struct inet_tcp_sk_desc *sk)
+tcp_repair_established(int fd, struct inet_tcp_sk_desc *sk)
 {
 	int ret;
 
@@ -350,6 +394,7 @@ tcp_repair_establised(int fd, struct inet_tcp_sk_desc *sk)
 		return -1;
 	}
 #endif
+	sk->rfd = fd;
 
 	ret = tcp_repair_on(sk->rfd);
 	if (ret < 0)
@@ -444,7 +489,7 @@ tcp_stream_get_queue(int sk, int queue_id,
 static int
 dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 {
-	int ret, img_fd, aux;
+	int ret, aux;
 	struct tcp_server_repair tse;
 	char *in_buf, *out_buf;
 	unsigned int size;
@@ -486,7 +531,7 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	printf("Reading options for socket\n");
 	ret = tcp_stream_get_options(sk->rfd, &tse);
 	if (ret < 0) {
-		printf("Faile to get options for TCP socket\n");
+		printf("Failed to get options for TCP socket\n");
 	}
 
 	/*
@@ -494,7 +539,7 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	 */
 
 	size = sizeof(aux);
-	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_NODELAY, &aux, &size)) {
+	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_NODELAY, &aux, size)) {
 		printf("Failed to get TCP NODELAY value\n");
 		return -1;
 	}
@@ -504,7 +549,7 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	}
 
 	size = sizeof(aux);
-	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_CORK, &aux, &size)) {
+	if (do_getsockopt(sk->rfd, SOL_TCP, TCP_CORK, &aux, size)) {
 		printf("Failed to get TCP CORK value\n");
 		return -1;
 	}
@@ -518,49 +563,23 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	 * Push the stuff to image
 	 */
 
-	write_repair_socket(REPAIR_FILE, &tse, in_buf, out_buf);
-#if 0
-	img_fd = open_image(CR_FD_TCP_STREAM, O_DUMP, sk->sd.ino);
-	if (img_fd < 0)
-		goto err_img;
-
-	ret = pb_write_one(img_fd, &tse, PB_TCP_STREAM);
-	if (ret < 0)
-		goto err_iw;
-
-	if (in_buf) {
-		ret = write_img_buf(img_fd, in_buf, tse.inq_len);
-		if (ret < 0)
-			goto err_iw;
+	if (write_repair_socket(REPAIR_FILE, &tse, in_buf, out_buf)) {
+		printf("Writing to TCP repair state to %s failed\n", REPAIR_FILE);
+		return -1;
 	}
 
-	if (out_buf) {
-		ret = write_img_buf(img_fd, out_buf, tse.outq_len);
-		if (ret < 0)
-			goto err_iw;
-	}
-
-	pr_info("Done\n");
-err_iw:
-	close(img_fd);
-err_img:
-err_opt:
-	xfree(out_buf);
-err_out:
-	xfree(in_buf);
-err_in:
-#endif
-	return ret;
+	return 0;
 }
 
-int dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk)
+int
+dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk)
 {
 	if (sk->state != TCP_ESTABLISHED)
 		return 0;
 
 	printf("Dumping TCP connection\n");
 
-	if (tcp_repair_establised(fd, sk))
+	if (tcp_repair_established(fd, sk))
 		return -1;
 
 	if (dump_tcp_conn_state(sk))
@@ -573,22 +592,243 @@ int dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk)
 	return 0;
 }
 
-int
-tcp_repair_socket_get(int sockfd, struct tcp_server_repair *repair)
+static int
+set_tcp_queue_seq(int sk, int queue, u32 seq)
 {
+	printf("\tSetting %d queue seq to %u\n", queue, seq);
+
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &queue, sizeof(queue)) < 0) {
+		perror("Can't set repair queue");
+		return -1;
+	}
+
+	if (setsockopt(sk, SOL_TCP, TCP_QUEUE_SEQ, &seq, sizeof(seq)) < 0) {
+		perror("Can't set queue seq");
+		return -1;
+	}
 
 	return 0;
 }
 
-int
-tcp_repair_socket_set(int sockfd, const struct tcp_server_repair *repair)
+static int
+restore_tcp_seqs(int sk, struct tcp_server_repair *tse)
 {
+	if (set_tcp_queue_seq(sk, TCP_RECV_QUEUE,
+				tse->inq_seq - tse->inq_len))
+		return -1;
+	if (set_tcp_queue_seq(sk, TCP_SEND_QUEUE,
+				tse->outq_seq - tse->outq_len))
+		return -1;
 
-	/* Not implemented */
+	return 0;
+}
+
+static int
+__send_tcp_queue(int sk, int queue, u32 len, char *data_q)
+{
+	int ret, err = -1;
+	int off, max;
+	char *buf;
+
+	buf = malloc(len);
+	if (!buf)
+		return -1;
+
+//	if (read_img_buf(imgfd, buf, len) < 0)
+//		goto err;
+
+	max = (queue == TCP_SEND_QUEUE) ? tcp_max_wshare : tcp_max_rshare;
+	off = 0;
+	while (len) {
+		int chunk = (len > max ? max : len);
+
+		ret = send(sk, data_q + off, chunk, 0);
+		if (ret != chunk) {
+			perror("Can't restore queue data");
+			goto err;
+		}
+		off += chunk;
+		len -= chunk;
+	}
+
+	err = 0;
+err:
+	free(buf);
+
+	return err;
+}
+
+static int
+send_tcp_queue(int sk, int queue, u32 len, char *data_q)
+{
+	printf("\tRestoring TCP %d queue data %u bytes\n", queue, len);
+
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_QUEUE, &queue, sizeof(queue)) < 0) {
+		perror("Can't set repair queue");
+		return -1;
+	}
+
+	return __send_tcp_queue(sk, queue, len, data_q);
+}
+
+static int
+restore_tcp_queues(int sk, struct tcp_server_repair *tse, char *in_buf, char *out_buf)
+{
+	u32 len;
+
+	if (restore_prepare_socket(sk))
+		return -1;
+
+	len = tse->inq_len;
+	if (len && send_tcp_queue(sk, TCP_RECV_QUEUE, len, in_buf))
+		return -1;
+
 	/*
-	if (app_sock_descr.type != SOCK_STREAM) {
-									printf("Error: Trying to dump non-TCP socket\n");
-								}
-*/
+	 * All data in a write buffer can be divided on two parts sent
+	 * but not yet acknowledged data and unsent data.
+	 * The TCP stack must know which data have been sent, because
+	 * acknowledgment can be received for them. These data must be
+	 * restored in repair mode.
+	 */
+	len = tse->outq_len - tse->unsq_len;
+	if (len && send_tcp_queue(sk, TCP_SEND_QUEUE, len, out_buf))
+		return -1;
+
+	/*
+	 * The second part of data have never been sent to outside, so
+	 * they can be restored without any tricks.
+	 */
+	len = tse->unsq_len;
+	tcp_repair_off(sk);
+	if (len && __send_tcp_queue(sk, TCP_SEND_QUEUE, len, out_buf + (tse->outq_len - tse->unsq_len)))
+		return -1;
+	if (tcp_repair_on(sk))
+		return -1;
+
+	return 0;
+}
+
+static int
+restore_tcp_opts(int sk, struct tcp_server_repair *tse)
+{
+	struct tcp_repair_opt opts[4];
+	int onr = 0;
+
+	printf("\tRestoring TCP options\n");
+
+	if (tse->opt_mask & TCPI_OPT_SACK) {
+		opts[onr].opt_code = TCPOPT_SACK_PERM;
+		opts[onr].opt_val = 0;
+		onr++;
+	}
+
+	if (tse->opt_mask & TCPI_OPT_WSCALE) {
+		opts[onr].opt_code = TCPOPT_WINDOW;
+		opts[onr].opt_val = tse->snd_wscale + (tse->rcv_wscale << 16);
+		onr++;
+	}
+
+	if (tse->opt_mask & TCPI_OPT_TIMESTAMPS) {
+		opts[onr].opt_code = TCPOPT_TIMESTAMP;
+		opts[onr].opt_val = 0;
+		onr++;
+	}
+
+	printf("Will set mss clamp to %u\n", tse->mss_clamp);
+	opts[onr].opt_code = TCPOPT_MAXSEG;
+	opts[onr].opt_val = tse->mss_clamp;
+	onr++;
+
+	if (setsockopt(sk, SOL_TCP, TCP_REPAIR_OPTIONS,
+				opts, onr * sizeof(struct tcp_repair_opt)) < 0) {
+		perror("Can't repair options: ");
+		return -1;
+	}
+
+	if (tse->has_timestamp) {
+		if (setsockopt(sk, SOL_TCP, TCP_TIMESTAMP,
+				&tse->timestamp, sizeof(tse->timestamp)) < 0) {
+			perror("Can't set timestamp: ");
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int
+restore_tcp_conn_state(int sk, struct inet_tcp_sk_desc *ii,
+		struct sockaddr_in *rem_sock, unsigned int rem_len)
+{
+	int aux;
+	char *in_buf, *out_buf;
+	struct tcp_server_repair tse;
+
+	printf("Restoring TCP connection id\n");
+
+	if (read_repair_socket(REPAIR_FILE, &tse, &in_buf, &out_buf))
+		printf("Failed to read TCP repair file\n");
+
+	if (restore_tcp_seqs(sk, &tse))
+		goto err_c;
+
+	if (bind_socket(sk, ii->type, ii->src_port))
+		goto err_c;
+
+	/* Put TCP connection directly into ESTABLISHED state */
+	if (connect(sk, (struct sockaddr *)rem_sock, rem_len) == -1) {
+		perror("Can't connect inet socket back");
+		goto err_c;
+	}
+
+	if (restore_tcp_opts(sk, &tse))
+		goto err_c;
+
+	if (restore_tcp_queues(sk, &tse, in_buf, out_buf))
+		goto err_c;
+
+	if (tse.has_nodelay && tse.nodelay) {
+		aux = 1;
+		if (do_setsockopt(sk, SOL_TCP, TCP_NODELAY, &aux, sizeof(aux)))
+			goto err_c;
+	}
+
+	if (tse.has_cork && tse.cork) {
+		aux = 1;
+		if (do_setsockopt(sk, SOL_TCP, TCP_CORK, &aux, sizeof(aux)))
+			goto err_c;
+	}
+
+	bzero(&tse, sizeof(tse));
+
+	return 0;
+
+err_c:
+	bzero(&tse, sizeof(tse));
+
+	return -1;
+}
+
+int
+restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_sock, unsigned int rem_len)
+{
+	int aux, ret;
+
+	printf("Restoring TCP connection\n");
+
+	if (tcp_repair_on(fd))
+		return -1;
+
+	if (restore_tcp_conn_state(fd, ii, rem_sock, rem_len))
+		return -1;
+
+	tcp_repair_off(fd);
+
+	ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
+	if (ret < 0) {
+		perror("Failed to set reuseaddr\n");
+		return ret;
+	}
+
 	return 0;
 }

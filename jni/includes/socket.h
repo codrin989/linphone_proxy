@@ -15,6 +15,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#ifndef TCPOPT_SACK_PERM
+#define TCPOPT_SACK_PERM TCPOPT_SACK_PERMITTED
+#endif
+
 struct inet_tcp_sk_desc {
 	unsigned int		family;
 	unsigned int		type;
@@ -26,10 +30,8 @@ struct inet_tcp_sk_desc {
 	unsigned int		uwqlen; /* unsent data */
 	unsigned int		src_addr[4];
 	unsigned int		dst_addr[4];
-	unsigned short		shutdown;
 
 	int rfd;
-	int cpt_reuseaddr;
 };
 
 struct tcp_server_repair
@@ -73,9 +75,9 @@ int
 tcp_state_get(int sockfd);
 
 int
-tcp_repair_socket_get(int sockfd, struct tcp_server_repair *repair);
+dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk);
 
 int
-tcp_repair_socket_set(int sockfd, const struct tcp_server_repair *repair);
+restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_sock, unsigned int rem_len);
 
 #endif /* SOCKET_H_ */
