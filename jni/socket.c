@@ -16,7 +16,7 @@
 #include <limits.h>
 
 #define REPAIR_FILE "/tmp/proxy_tcp_repair.dmp"
-
+#define REPAIR_FILE_2 "/tmp/proxy_tcp_repair.dmp_out"
 static int tcp_max_wshare = 2U << 20;
 static int tcp_max_rshare = 3U << 20;
 
@@ -25,7 +25,7 @@ write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_bu
 {
 	int fd, rc;
 
-	fd = open(file, O_WRONLY | O_CREAT, 0644);
+	fd = open(file, O_WRONLY | O_CREAT, 0777);
 	if (fd < 0) {
 		perror("Failed to create file for TCP repair: ");
 		return -1;
@@ -766,13 +766,13 @@ restore_tcp_conn_state(int sk, struct inet_tcp_sk_desc *ii,
 
 	printf("Restoring TCP connection id\n");
 
-	if (read_repair_socket(REPAIR_FILE, &tse, &in_buf, &out_buf))
+	if (read_repair_socket(REPAIR_FILE_2, &tse, &in_buf, &out_buf))
 		printf("Failed to read TCP repair file\n");
 
 	if (restore_tcp_seqs(sk, &tse))
 		goto err_c;
 
-	if (bind_socket(sk, ii->type, ii->src_port))
+	if (bind_socket(sk, ii->family, ii->src_port))
 		goto err_c;
 
 	/* Put TCP connection directly into ESTABLISHED state */

@@ -116,21 +116,22 @@ t2 = datetime.datetime.now()
 dt = t2 - t1
 print "... " + str(dt)
 
-"""
+#"""
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind(("", MANAGER_PORT))
 
 s.sendto("Stop", local_addr)
 
+print "Waiting for message from session proxy"
 msg, addr = s.recvfrom(MAX_FRAME_SIZE)
-print "received " + len(msg) + " bytes: " + msg
+print "received " + str(len(msg)) + " bytes: " + msg
 if not msg.startswith("Ack"):
 	print "wrong message"
 	sys.exit(1)
 
 print "copy TCP repair structure ..."
-sys_cmd("scp /tmp/proxy_tcp_repair.dmp codrin@" + trudy_ip + ":/tmp/ > /dev/null")
-"""
+sys_cmd("scp /tmp/proxy_tcp_repair.dmp codrin@" + trudy_ip + ":/tmp/proxy_tcp_repair.dmp_out > /dev/null")
+#"""
 
 print ""
 print "last CRIU incremental dump:"
@@ -138,16 +139,16 @@ t1 = datetime.datetime.now()
 sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/4 --tcp-established --track-mem --prev-images-dir ../3")
 sys_cmd("scp -r images/4 codrin@" + trudy_ip + ":~/images > /dev/null")
 
-"""
+#"""
 s.sendto("TCP repair", remote_addr)
-s.sendto(buffer[:n], remote_addr)
+#s.sendto(buffer[:n], remote_addr)
 
 msg, addr = s.recvfrom(MAX_FRAME_SIZE)
-print "received " + len(msg) + " bytes: " + msg
+print "received " + str(len(msg)) + " bytes: " + msg
 if not msg.startswith("Ack"):
 	print "wrong message"
 	sys.exit(1)
-"""
+#"""
 
 print "CRIU restore:"
 sys_cmd("ssh codrin@" + trudy_ip +" 'sudo criu restore --images-dir ~/images/4 --tcp-established -d'")
@@ -155,15 +156,15 @@ t2 = datetime.datetime.now()
 dt = t2 - t1
 print "... " + str(dt)
 
-"""
-s.sendto("IP: " + trudy_ip, remote_addr)
+#"""
+s.sendto("IP: " + trudy_ip, local_addr)
 
 msg, addr = s.recvfrom(MAX_FRAME_SIZE)
-print "received " + len(msg) + " bytes: " + msg
+print "received " + str(len(msg)) + " bytes: " + msg
 if not msg.startswith("Ack"):
 	print "wrong message"
 	sys.exit(1)
-"""
+#"""
 
 print ""
 print "ending migration ..."
