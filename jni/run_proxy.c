@@ -36,7 +36,7 @@ run_proxy(
 {
 	proxy_state = NONE;
 	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", linphone_proxy->proxy_to_proxy_port, linphone_proxy->proxy_to_proxy_data_port);
-	int rc, num_fds = LISTENING_SOCKETS, i;
+	int rc, num_fds = LISTENING_SOCKETS, i, j;
 	unsigned int udp_proxy_to_proxy_len, udp_proxy_to_linphone_len, udp_proxy_to_proxy_data_len,
 		udp_proxy_to_linphone_data_len, manager_len, mirror_len, tcp_proxy_to_proxy_len, tcp_proxy_to_app_len, configure_len;
 	char *buff = malloc(MAX_PACKET_SIZE), *mirror_ip;
@@ -339,7 +339,11 @@ run_proxy(
 
 						//fds[7].fd = -1;
 						if (behavior == SERVER) {
-							/* tell the other proxy to stop first */
+							/* stop listenning from VNC server */
+							fds[7].revents = 0;
+							fds[7].fd = -1;
+
+							/* tell the other proxy to stop */
 							strcpy(buff, "Stop");
 							if ((rc = sendto(configure_socket, buff, strlen(buff), 0, (struct sockaddr *) &configure_sock, sizeof(configure_sock))) != (ssize_t)strlen(buff)) {
 								perror("CONFIGURE: Cannot send command to [REMOTE PROXY]\n");
@@ -352,39 +356,44 @@ run_proxy(
 							/* stop reading data from application */
 							tcp_proxy_state = STOPPED;
 
-							/* send data to REMOTE proxy if any */
-							if (fds[7].revents != 0) {
-								/* got something from localhost VNC client */
-								if ((rc = recvfrom(fds[7].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
-									perror("TCP VNC client final: no message received\n");
-
-									/* remove the socket */
-									close(fds[7].fd);
-									tcp_proxy_to_app_client_socket = -1;
-									fds[7].fd = -1;
-									//num_fds--;
+							/* send data to VNC client if any */
+							if (fds[6].revents != 0) {
+								/* got something from REMOTE proxy */
+								if ((rc = recvfrom(fds[6].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
+									perror("TCP REMOTE proxy final: no message received\n");
+									if (rc == 0) {
+										/* remove the socket */
+										close(fds[6].fd);
+										fds[6].fd = -1;
+										printf("Closing socket to REMOTE PROXY...\n");
+										//num_fds--;
+									}
 
 									/*remove the socket to REMOTE proxy server */
 									//close(vnc_proxy->proxy_to_proxy_socket);
 									//vnc_proxy->proxy_to_proxy_socket = -1;
-									connected = 0;
 								} else {
-									/* received something from remote via TCP; send to TCP appl */
-									printf ("TCP DATA final: from [VNC client: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
-
-									if (sendto(vnc_proxy->proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_sock)) != rc) {
-										perror("TCP proxy Server final: Cannot forward vnc data packet\n");
-									} else
-										printf("TCP DATA final: sent [VNC client] - %d bytes\n", rc);
-
-									memset(buff, 0, MAX_PACKET_SIZE);
+									/* received something from remote proxy via TCP; send to VNC client */
+									printf ("TCP DATA: from [REMOTE PROXY: %d] - %d bytes\n", ntohs(tcp_proxy_to_proxy_sock.sin_port), rc);
+									if (sendto(tcp_proxy_to_app_client_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != rc) {
+										perror("TCP DATA: Cannot forward to [VNC client]\n");
+									}
+									else {
+										printf("TCP DATA: sent [VNC client: %s] - %d bytes\n", buff, rc);
+									}
+									memset (buff, 0, MAX_PACKET_SIZE);
 									/* If I was told to stop, no more data will be read */
 								}
 							}
+							fds[6].fd = -1;
+							fds[6].revents = 0;
+							connected = 0;
 							tcp_proxy_state = STOPPED;
+							/* stop connecting with the remote proxy */
+							close(vnc_proxy->proxy_to_proxy_socket);
 
 							/* do not listen for VNC client anymore */
-							fds[7].fd = -1;
+							fds[8].fd = -1;
 
 							strcpy(buff, "Ack");
 							/* let the server know it */
@@ -427,31 +436,39 @@ run_proxy(
 							/* command was after STOP */
 							tcp_proxy_state = STOPPED;
 
-							/* send something received from VNC server if pending */
-							if (fds[7].revents != 0) {
-								if ((rc = recvfrom(vnc_proxy->proxy_to_app_socket, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
-									perror("TCP proxy final: no message received from VNC immediately after stop\n");
+							/* send something received from REMOTE PROXY if pending */
+							if (fds[8].revents != 0) {
+								if ((rc = recvfrom(fds[8].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
+									perror("TCP proxy Server - no message received: ");
 									if (rc == 0) {
-										close(fds[7].fd);
-										fds[7].fd = -1;
-										connected = 0;
+										/* remove the socket */
+										close(fds[8].fd);
+										tcp_proxy_to_proxy_client_socket = -1;
+										fds[8].fd = -1;
+										//num_fds--;
+
+										/*remove the socket to the VNC server */
+										//close(vnc_proxy->proxy_to_app_socket);
+										//vnc_proxy->proxy_to_app_socket = -1;
+										//fds[7].fd = -1;
 									}
+
 								} else {
-									printf ("TCP DATA final: from [VNC server: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
-									if (tcp_proxy_to_proxy_client_socket != -1) {
-										if (sendto(tcp_proxy_to_proxy_client_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_len)) != rc) {
-											perror("TCP DATA final: Cannot forward to [REMOTE proxy]\n");
-										}
-										else {
-											printf("TCP DATA final: sent [REMOTE: %s] - %d bytes\n", buff, rc);
-										}
-									}
-									memset (buff, 0, MAX_PACKET_SIZE);
+									/* received something from remote via TCP; send to TCP appl */
+									printf ("TCP DATA: from [REMOTE: %d] - %d bytes\n", ntohs(tcp_proxy_to_proxy_sock.sin_port), rc);
+
+									if (sendto(vnc_proxy->proxy_to_app_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock)) != rc) {
+										perror("TCP proxy Server: Cannot forward vnc data packet\n");
+									} else
+										printf("TCP DATA: sent [VNC server] - %d bytes\n", rc);
+
+									memset(buff, 0, MAX_PACKET_SIZE);
 								}
 							}
-							fds[7].revents = 0;
 
-							/* If I was told to stop, no more data will be read */
+							fds[8].revents = 0;
+
+							/* If I was told to stop, no more data will be read from VNC server */
 							fds[7].fd = -1;
 
 							/* send the TCP repair structure */
@@ -512,6 +529,13 @@ run_proxy(
 								printf("ERROR: failed to dump TCP repair state\n");
 							}
 
+							//close(vnc_proxy->proxy_to_app_socket);
+							connected = 1;
+
+							fds[7].fd = vnc_proxy->proxy_to_app_socket;
+							fds[7].events = POLLIN;
+							fds[7].revents = 0;
+
 							printf("Restored TCP connection\n");
 							/* send an ack */
 							strcpy(buff, "Ack");
@@ -542,14 +566,17 @@ run_proxy(
 							}
 
 							/* close the initial socket */
-							close(vnc_proxy->proxy_to_proxy_socket);
-							connected = 0;
-
+							//close(vnc_proxy->proxy_to_proxy_socket);
+							//fds[7].revents = 0;
+							//fds[7].fd = -1;
 							/* create a new socket to the new ip */
-							vnc_proxy->proxy_to_proxy_socket = -1;
 							if ((vnc_proxy->proxy_to_proxy_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
 								perror("cannot create new TCP proxy-to-proxy socket: ");
-							rc = -1;
+
+							j = 1;
+							if (setsockopt(vnc_proxy->proxy_to_proxy_socket, SOL_SOCKET, SO_REUSEADDR, &j, sizeof(j)) == -1)
+								perror("Failed to reause addr\n");
+
 							rc = bind_socket(
 									vnc_proxy->proxy_to_proxy_socket,
 									AF_INET,
@@ -568,20 +595,26 @@ run_proxy(
 							tcp_proxy_to_proxy_sock.sin_port = htons(vnc_proxy->proxy_to_proxy_port);
 
 							/* connect to the new ip */
-							for (i = 1; i <= 5; i++) {
+							for (j = 1; j <= 5; j++) {
 								rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
 								if (!rc) {
 									printf("Connected to new Remote TCP proxy %s...\n", buff + strlen("IP: "));
 									connected = 1;
 									fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
+									fds[6].events = POLLIN;
+									fds[6].revents = 0;
 									break;
 								}
-								printf("Could not connect to new %s Remote TCP proxy Retrying %d ...\n", buff + strlen("IP: "), i);
+								printf("Could not connect to new %s Remote TCP proxy Retrying %d ...\n", buff + strlen("IP: "), j);
 								sleep(3);
 							}
 
 							/* restart listening from the VNC client */
-							fds[8].fd = tcp_proxy_to_proxy_client_socket;
+							fds[8].fd = tcp_proxy_to_app_client_socket;
+							fds[8].events = POLLIN;
+							fds[8].revents = 0;
+
+							tcp_proxy_state = NORMAL;
 							strcpy(buff, "Ack");
 							/* let the server know it */
 							//manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
@@ -591,7 +624,7 @@ run_proxy(
 							else {
 								printf("MGM: sent [REMOTE PROXY MANAGER: %s] - %d bytes\n", buff, rc);
 							}
-							memset (buff, 0, MAX_PACKET_SIZE);
+
 							goto __no_answer;
 						} else {
 							printf("Unknown behavior found\n");
@@ -640,7 +673,7 @@ __no_answer:
 						if (!connected) {
 							/* time to connect to the VNC server */
 							printf("Trying to connect to the VNC server\n");
-							for (i = 1; i <= 5; i++) {
+							for (j = 1; j <= 5; j++) {
 								rc = connect(vnc_proxy->proxy_to_app_socket, (struct sockaddr *) &tcp_proxy_to_app_sock, tcp_proxy_to_app_len);
 								if (!rc) {
 									printf("Connected to VNC server...\n");
@@ -648,7 +681,7 @@ __no_answer:
 									connected = 1;
 									break;
 								}
-								printf("Could not connect to VNC server Retrying %d ...\n", i);
+								printf("Could not connect to VNC server Retrying %d ...\n", j);
 								sleep(3);
 							}
 						}
@@ -715,7 +748,7 @@ __no_answer:
 						if (!connected) {
 							/* act as a CLIENT and CONNECT to TCP remove SERVER */
 
-							for (i = 1; i <= 5; i++) {
+							for (j = 1; j <= 5; j++) {
 								rc = connect(vnc_proxy->proxy_to_proxy_socket,  (struct sockaddr *) &tcp_proxy_to_proxy_sock, tcp_proxy_to_proxy_len);
 								if (!rc) {
 									printf("Connected to Remote TCP proxy...\n");
@@ -723,7 +756,7 @@ __no_answer:
 									fds[6].fd = vnc_proxy->proxy_to_proxy_socket;
 									break;
 								}
-								printf("Could not connect to Remote TCP proxy Retrying %d ...\n", i);
+								printf("Could not connect to Remote TCP proxy Retrying %d ...\n", j);
 								sleep(3);
 							}
 						}
@@ -780,9 +813,9 @@ __no_answer:
 						printf ("TCP DATA: from [VNC client: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
 
 						if (sendto(vnc_proxy->proxy_to_proxy_socket, buff, rc, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, sizeof(tcp_proxy_to_proxy_sock)) != rc) {
-							perror("TCP proxy Server: Cannot forward vnc data packet\n");
+							perror("TCP proxy Server: Cannot forward vnc data packet to REMOTE PROXY\n");
 						} else
-							printf("TCP DATA: sent [VNC client] - %d bytes\n", rc);
+							printf("TCP DATA: sent [REMOTE PROXY] - %d bytes\n", rc);
 
 						memset(buff, 0, MAX_PACKET_SIZE);
 #if 0

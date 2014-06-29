@@ -822,6 +822,7 @@ restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_soc
 
 	tcp_repair_off(fd);
 
+	aux = 1;
 	ret = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &aux, sizeof(aux));
 	if (ret < 0) {
 		perror("Failed to set reuseaddr\n");

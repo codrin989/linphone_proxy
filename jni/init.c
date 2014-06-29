@@ -218,6 +218,11 @@ init_tcp(
 	port = START_PORT_NO_TCP_INCOMMING;
 	if ((vnc_proxy->proxy_to_proxy_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
 		return_error("cannot create TCP proxy-to-proxy socket", -1);
+
+	i = 1;
+	if (setsockopt(vnc_proxy->proxy_to_proxy_socket, SOL_SOCKET, SO_REUSEADDR, &i, sizeof(i)) == -1)
+		perror("Failed to reause addr\n");
+
 	rc = -1;
 	rc = bind_socket(
 			vnc_proxy->proxy_to_proxy_socket,
@@ -237,6 +242,11 @@ init_tcp(
 
 	rc = -1;
 	for (i=0; i<10 && rc < 0; i++) {
+		rc = 1;
+
+		if (setsockopt(vnc_proxy->proxy_to_app_socket, SOL_SOCKET, SO_REUSEADDR, &rc, sizeof(rc)) == -1)
+			perror("Failed to reause addr\n");
+
 		rc = bind_socket(
 			vnc_proxy->proxy_to_app_socket,
 			AF_INET,
