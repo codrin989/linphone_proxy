@@ -359,15 +359,14 @@ run_proxy(
 									perror("TCP VNC client final: no message received\n");
 
 									/* remove the socket */
-									close(fds[i].fd);
+									close(fds[7].fd);
 									tcp_proxy_to_app_client_socket = -1;
-									fds[i].fd = -1;
+									fds[7].fd = -1;
 									//num_fds--;
 
 									/*remove the socket to REMOTE proxy server */
 									//close(vnc_proxy->proxy_to_proxy_socket);
 									//vnc_proxy->proxy_to_proxy_socket = -1;
-									fds[6].fd = -1;
 									connected = 0;
 								} else {
 									/* received something from remote via TCP; send to TCP appl */
@@ -384,7 +383,9 @@ run_proxy(
 							}
 							tcp_proxy_state = STOPPED;
 
-							fds[8].fd = -1;
+							/* do not listen for VNC client anymore */
+							fds[7].fd = -1;
+
 							strcpy(buff, "Ack");
 							/* let the server know it */
 							//manager_sock.sin_addr.s_addr = inet_addr(remote_ip);
@@ -431,7 +432,7 @@ run_proxy(
 								if ((rc = recvfrom(vnc_proxy->proxy_to_app_socket, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_app_sock, &tcp_proxy_to_app_len)) <= 0) {
 									perror("TCP proxy final: no message received from VNC immediately after stop\n");
 									if (rc == 0) {
-										close(fds[i].fd);
+										close(fds[7].fd);
 										fds[7].fd = -1;
 										connected = 0;
 									}
@@ -447,8 +448,8 @@ run_proxy(
 									}
 									memset (buff, 0, MAX_PACKET_SIZE);
 								}
-								fds[7].revents = 0;
 							}
+							fds[7].revents = 0;
 
 							/* If I was told to stop, no more data will be read */
 							fds[7].fd = -1;
@@ -462,6 +463,8 @@ run_proxy(
 							app_sock_descr.state = tcp_state_get(vnc_proxy->proxy_to_app_socket);
 							if (dump_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr)) {
 								printf("ERROR: failed to dump TCP repair state\n");
+							} else {
+								close(vnc_proxy->proxy_to_app_socket);
 							}
 
 							printf("TCP repaired\n");
@@ -485,6 +488,16 @@ run_proxy(
 						} else if (behavior == SERVER) {
 							/* need to repair the TCP socket connected to the server */
 							struct inet_tcp_sk_desc app_sock_descr;
+							close(vnc_proxy->proxy_to_app_socket);
+
+							memset(&tcp_proxy_to_app_sock, 0, tcp_proxy_to_app_len);
+							tcp_proxy_to_app_sock.sin_family = AF_INET;
+							tcp_proxy_to_app_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
+							tcp_proxy_to_app_sock.sin_port = htons(VNC_TCP_PORT);
+
+							if ((vnc_proxy->proxy_to_app_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
+								perror("cannot create TCP repair proxy-to-app socket: ");
+
 							app_sock_descr.rfd = vnc_proxy->proxy_to_app_socket;
 							app_sock_descr.family = AF_INET;
 							app_sock_descr.type = socket_type_get(vnc_proxy->proxy_to_app_socket);
@@ -494,12 +507,8 @@ run_proxy(
 							app_sock_descr.src_addr[1] = (INADDR_ANY & 0x00FF0000) >> 16;
 							app_sock_descr.src_addr[2] = (INADDR_ANY & 0x0000FF00) >> 8;
 							app_sock_descr.src_addr[3] = (INADDR_ANY & 0x000000FF);
-							close(vnc_proxy->proxy_to_app_socket);
 
-							if ((vnc_proxy->proxy_to_proxy_socket = create_socket(AF_INET, SOCK_STREAM)) < 0)
-									perror("cannot create TCP repair proxy-to-app socket: ");
-
-							if (restore_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr, &tcp_proxy_to_app_sock, tcp_proxy_to_app_len)) {
+							if (restore_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr, &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock))) {
 								printf("ERROR: failed to dump TCP repair state\n");
 							}
 
@@ -650,7 +659,7 @@ __no_answer:
 						perror("TCP proxy: no message received from REMOTE proxy\n");
 						if (rc == 0) {
 							close(fds[i].fd);
-							fds[6].fd = -1;
+							fds[i].fd = -1;
 							connected = 0;
 						}
 					} else {
@@ -672,7 +681,7 @@ __no_answer:
 						perror("TCP proxy: no message received from VNC\n");
 						if (rc == 0) {
 							close(fds[i].fd);
-							fds[7].fd = -1;
+							fds[i].fd = -1;
 							connected = 0;
 						}
 					} else {
@@ -724,19 +733,20 @@ __no_answer:
 				if (behavior == SERVER) {
 					/* get something from remote TCP client proxy */
 					if ((rc = recvfrom(fds[i].fd, buff, MAX_PACKET_SIZE, 0, (struct sockaddr *) &tcp_proxy_to_proxy_sock, &tcp_proxy_to_proxy_len)) <= 0) {
-						perror("TCP proxy Server: no message received\n");
+						perror("TCP proxy Server - no message received: ");
+						if (rc == 0) {
+							/* remove the socket */
+							close(fds[i].fd);
+							tcp_proxy_to_proxy_client_socket = -1;
+							fds[i].fd = -1;
+							//num_fds--;
 
-						/* remove the socket */
-						close(fds[i].fd);
-						tcp_proxy_to_proxy_client_socket = -1;
-						fds[i].fd = -1;
-						//num_fds--;
-
-						/*remove the socket to the VNC server */
-						//close(vnc_proxy->proxy_to_app_socket);
-						//vnc_proxy->proxy_to_app_socket = -1;
-						fds[7].fd = -1;
-						connected = 0;
+							/*remove the socket to the VNC server */
+							//close(vnc_proxy->proxy_to_app_socket);
+							//vnc_proxy->proxy_to_app_socket = -1;
+							//fds[7].fd = -1;
+							connected = 0;
+						}
 
 					} else {
 						/* received something from remote via TCP; send to TCP appl */
@@ -763,8 +773,8 @@ __no_answer:
 						/*remove the socket to REMOTE proxy server */
 						//close(vnc_proxy->proxy_to_proxy_socket);
 						//vnc_proxy->proxy_to_proxy_socket = -1;
-						fds[6].fd = -1;
-						connected = 0;
+						//fds[6].fd = -1;
+						//connected = 0;
 					} else {
 						/* received something from remote via TCP; send to TCP appl */
 						printf ("TCP DATA: from [VNC client: %d] - %d bytes\n", ntohs(tcp_proxy_to_app_sock.sin_port), rc);
@@ -775,6 +785,7 @@ __no_answer:
 							printf("TCP DATA: sent [VNC client] - %d bytes\n", rc);
 
 						memset(buff, 0, MAX_PACKET_SIZE);
+#if 0
 						/* If I was told to stop, no more data will be read */
 						if (tcp_proxy_state == STOPPED) {
 							fds[8].fd = -1;
@@ -789,6 +800,7 @@ __no_answer:
 							}
 							memset (buff, 0, MAX_PACKET_SIZE);
 						}
+#endif
 					}
 				}
 			}

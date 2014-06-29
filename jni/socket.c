@@ -764,8 +764,6 @@ restore_tcp_conn_state(int sk, struct inet_tcp_sk_desc *ii,
 	char *in_buf, *out_buf;
 	struct tcp_server_repair tse;
 
-	printf("Restoring TCP connection id\n");
-
 	if (read_repair_socket(REPAIR_FILE_2, &tse, &in_buf, &out_buf))
 		printf("Failed to read TCP repair file\n");
 
