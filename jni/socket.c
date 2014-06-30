@@ -14,14 +14,16 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <linux/filter.h>
 
 #define REPAIR_FILE "/tmp/proxy_tcp_repair.dmp"
 #define REPAIR_FILE_2 "/tmp/proxy_tcp_repair.dmp_out"
+#define	IFNAMSIZ	16
 static int tcp_max_wshare = 2U << 20;
 static int tcp_max_rshare = 3U << 20;
 
 int
-write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_buf, char *out_buf)
+write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_buf, char *out_buf, struct sk_opts_entry *soe)
 {
 	int fd, rc;
 
@@ -64,7 +66,7 @@ write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_bu
 }
 
 int
-read_repair_socket(const char *file, struct tcp_server_repair *tse, char **in_buf, char **out_buf)
+read_repair_socket(const char *file, struct tcp_server_repair *tse, char **in_buf, char **out_buf, struct sk_opts_entry *soe)
 {
 	int fd, rc;
 	char magic[4];
@@ -487,7 +489,7 @@ tcp_stream_get_queue(int sk, int queue_id,
 
 
 static int
-dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
+dump_tcp_conn_state(struct inet_tcp_sk_desc *sk, struct sk_opts_entry *soe)
 {
 	int ret, aux;
 	struct tcp_server_repair tse;
@@ -563,7 +565,7 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	 * Push the stuff to image
 	 */
 
-	if (write_repair_socket(REPAIR_FILE, &tse, in_buf, out_buf)) {
+	if (write_repair_socket(REPAIR_FILE, &tse, in_buf, out_buf, soe)) {
 		printf("Writing to TCP repair state to %s failed\n", REPAIR_FILE);
 		return -1;
 	}
@@ -571,18 +573,133 @@ dump_tcp_conn_state(struct inet_tcp_sk_desc *sk)
 	return 0;
 }
 
+static void encode_filter(struct sock_filter *f, u64 *img, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		img[i] = ((u64)f[i].code << 48) |
+			 ((u64)f[i].jt << 40) |
+			 ((u64)f[i].jf << 32) |
+			 ((u64)f[i].k << 0);
+}
+
+int dump_socket_opts(int sk, struct sk_opts_entry *soe)
+{
+	int ret = 0, val;
+	struct timeval tv;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_SNDBUF, &soe->so_sndbuf, sizeof(soe->so_sndbuf));
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVBUF, &soe->so_rcvbuf, sizeof(soe->so_rcvbuf));
+	soe->has_so_priority = true;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_PRIORITY, &soe->so_priority, sizeof(soe->so_priority));
+	soe->has_so_rcvlowat = true;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVLOWAT, &soe->so_rcvlowat, sizeof(soe->so_rcvlowat));
+	soe->has_so_mark = true;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_MARK, &soe->so_mark, sizeof(soe->so_mark));
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+	soe->so_snd_tmo_sec = tv.tv_sec;
+	soe->so_snd_tmo_usec = tv.tv_usec;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	soe->so_rcv_tmo_sec = tv.tv_sec;
+	soe->so_rcv_tmo_usec = tv.tv_usec;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+	soe->reuseaddr = val ? true : false;
+	soe->has_reuseaddr = true;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_PASSCRED, &val, sizeof(val));
+	soe->has_so_passcred = true;
+	soe->so_passcred = val ? true : false;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_PASSSEC, &val, sizeof(val));
+	soe->has_so_passsec = true;
+	soe->so_passsec = val ? true : false;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_DONTROUTE, &val, sizeof(val));
+	soe->has_so_dontroute = true;
+	soe->so_dontroute = val ? true : false;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_NO_CHECK, &val, sizeof(val));
+	soe->has_so_no_check = true;
+	soe->so_no_check = val ? true : false;
+
+	/*==========*/
+	char dev[IFNAMSIZ];
+	socklen_t len = sizeof(dev);
+
+	ret = getsockopt(sk, SOL_SOCKET, SO_BINDTODEVICE, &dev, &len);
+	if (ret) {
+		perror("Can't get bound dev");
+		return ret;
+	}
+
+	if (len == 0)
+		goto __skip_bound;
+
+	soe->so_bound_dev = malloc(len);
+	if (soe->so_bound_dev == NULL)
+		return -1;
+	strcpy(soe->so_bound_dev, dev);
+__skip_bound:
+	/*===============*/
+
+	/*************/
+	len = 0;
+	struct sock_filter *flt;
+
+	ret = getsockopt(sk, SOL_SOCKET, SO_GET_FILTER, NULL, &len);
+	if (ret) {
+		perror("Can't get socket filter len");
+	}
+
+	if (!len) {
+		printf("No filter for socket\n");
+		goto __skip_filter;
+	}
+
+	flt = malloc(len * sizeof(*flt));
+
+	ret = getsockopt(sk, SOL_SOCKET, SO_GET_FILTER, flt, &len);
+	if (ret) {
+		perror("Can't get socket filter");
+		free(flt);
+		return ret;
+	}
+
+	soe->so_filter = malloc(len * sizeof(*soe->so_filter));
+	if (!soe->so_filter) {
+		free(flt);
+		return -1;
+	}
+
+	encode_filter(flt, soe->so_filter, len);
+	soe->n_so_filter = len;
+	free(flt);
+__skip_filter:
+	/**************/
+
+	return ret;
+}
+
 int
 dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk)
 {
+	struct sk_opts_entry soe;
 	if (sk->state != TCP_ESTABLISHED)
 		return 0;
+
+	if (dump_socket_opts(fd, &soe))
+		printf("Failed to dump socket options\n");
 
 	printf("Dumping TCP connection\n");
 
 	if (tcp_repair_established(fd, sk))
 		return -1;
 
-	if (dump_tcp_conn_state(sk))
+	if (dump_tcp_conn_state(sk, &soe))
 		return -1;
 
 	/*
@@ -761,13 +878,13 @@ restore_tcp_opts(int sk, struct tcp_server_repair *tse)
 
 static int
 restore_tcp_conn_state(int sk, struct inet_tcp_sk_desc *ii,
-		struct sockaddr_in *rem_sock, unsigned int rem_len)
+		struct sockaddr_in *rem_sock, unsigned int rem_len, struct sk_opts_entry *soe)
 {
 	int aux;
 	char *in_buf, *out_buf;
 	struct tcp_server_repair tse;
 
-	if (read_repair_socket(REPAIR_FILE_2, &tse, &in_buf, &out_buf))
+	if (read_repair_socket(REPAIR_FILE_2, &tse, &in_buf, &out_buf, soe))
 		printf("Failed to read TCP repair file\n");
 
 	if (restore_tcp_seqs(sk, &tse))
@@ -810,17 +927,107 @@ err_c:
 	return -1;
 }
 
+static void
+decode_filter(u64 *img, struct sock_filter *f, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		f[i].code = img[i] >> 48;
+		f[i].jt = img[i] >> 40;
+		f[i].jf = img[i] >> 32;
+		f[i].k = img[i] >> 0;
+	}
+}
+
+
+int
+restore_socket_opts(int sk, struct sk_opts_entry *soe)
+{
+	int ret = 0, val;
+	struct timeval tv;
+
+	printf("%d restore sndbuf %d rcv buf %d\n", sk, soe->so_sndbuf, soe->so_rcvbuf);
+
+	/* setsockopt() multiplies the input values by 2 */
+	val = soe->so_sndbuf / 2;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_SNDBUFFORCE, &val, sizeof(val));
+	val = soe->so_rcvbuf / 2;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVBUFFORCE, &val, sizeof(val));
+
+	if (soe->has_so_priority) {
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_PRIORITY, &soe->so_priority, sizeof(soe->so_priority));
+	}
+	if (soe->has_so_rcvlowat) {
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVLOWAT, &soe->so_rcvlowat, sizeof(soe->so_rcvlowat));
+	}
+	if (soe->has_so_mark) {
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_MARK, &soe->so_mark, sizeof(soe->so_mark));
+	}
+	if (soe->has_so_passcred && soe->so_passcred) {
+		val = 1;
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_PASSCRED, &val, sizeof(val));
+	}
+	if (soe->has_so_passsec && soe->so_passsec) {
+		val = 1;
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_PASSSEC, &val, sizeof(val));
+	}
+	if (soe->has_so_dontroute && soe->so_dontroute) {
+		val = 1;
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_DONTROUTE, &val, sizeof(val));
+	}
+	if (soe->has_so_no_check && soe->so_no_check) {
+		val = 1;
+		ret |= do_setsockopt(sk, SOL_SOCKET, SO_NO_CHECK, &val, sizeof(val));
+	}
+
+	tv.tv_sec = soe->so_snd_tmo_sec;
+	tv.tv_usec = soe->so_snd_tmo_usec;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+	tv.tv_sec = soe->so_rcv_tmo_sec;
+	tv.tv_usec = soe->so_rcv_tmo_usec;
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+	/* restore bound dev */
+	char *n = soe->so_bound_dev;
+
+	if (!n)
+		return ret;
+
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_BINDTODEVICE, n, strlen(n));
+
+	struct sock_fprog sfp;
+
+	if (!soe->n_so_filter)
+		return 0;
+
+	printf("Restoring socket filter\n");
+	sfp.len = soe->n_so_filter;
+	sfp.filter = malloc(soe->n_so_filter * sfp.len);
+	if (!sfp.filter)
+		return -1;
+
+	decode_filter(soe->so_filter, sfp.filter, sfp.len);
+	ret |= do_setsockopt(sk, SOL_SOCKET, SO_ATTACH_FILTER, &sfp, sizeof(sfp));
+	free(sfp.filter);
+
+
+	return ret;
+}
+
 int
 restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_sock, unsigned int rem_len)
 {
 	int aux, ret;
+	struct sk_opts_entry soe;
 
 	printf("Restoring TCP connection\n");
 
 	if (tcp_repair_on(fd))
 		return -1;
 
-	if (restore_tcp_conn_state(fd, ii, rem_sock, rem_len))
+	if (restore_tcp_conn_state(fd, ii, rem_sock, rem_len, &soe))
 		return -1;
 
 	tcp_repair_off(fd);
@@ -831,6 +1038,8 @@ restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_soc
 		perror("Failed to set reuseaddr\n");
 		return ret;
 	}
+
+	restore_socket_opts(fd, &soe);
 
 	return 0;
 }

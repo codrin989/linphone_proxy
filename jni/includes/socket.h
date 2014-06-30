@@ -55,6 +55,35 @@ struct tcp_server_repair
 	uint32_t unsq_len; /* unsent data in the send queue */
 };
 
+struct sk_opts_entry
+{
+  uint32_t so_sndbuf;
+  uint32_t so_rcvbuf;
+  uint64_t so_snd_tmo_sec;
+  uint64_t so_snd_tmo_usec;
+  uint64_t so_rcv_tmo_sec;
+  uint64_t so_rcv_tmo_usec;
+  int has_reuseaddr;
+  int reuseaddr;
+  int has_so_priority;
+  uint32_t so_priority;
+  int has_so_rcvlowat;
+  uint32_t so_rcvlowat;
+  int has_so_mark;
+  uint32_t so_mark;
+  int has_so_passcred;
+  int so_passcred;
+  int has_so_passsec;
+  int so_passsec;
+  int has_so_dontroute;
+  int so_dontroute;
+  int has_so_no_check;
+  int so_no_check;
+  char *so_bound_dev;
+  size_t n_so_filter;
+  uint64_t *so_filter;
+};
+
 
 int
 create_socket(int domain, int type);

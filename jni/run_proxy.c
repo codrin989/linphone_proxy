@@ -471,6 +471,17 @@ run_proxy(
 							/* If I was told to stop, no more data will be read from VNC server */
 							fds[7].fd = -1;
 
+							/* add iptables rules to dump RSP */
+							sprintf(buff, "iptables -A OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to add filer nr 1\n");
+
+							sprintf(buff, "iptables -A INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to add filer nr 2\n");
+
 							/* send the TCP repair structure */
 							printf("Starting to dump TCP repair\n");
 							struct inet_tcp_sk_desc app_sock_descr;
@@ -528,6 +539,17 @@ run_proxy(
 							if (restore_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr, &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock))) {
 								printf("ERROR: failed to dump TCP repair state\n");
 							}
+
+							/* remove iptables rules for RSP */
+							sprintf(buff, "iptables -D OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to remove filer nr 1\n");
+
+							sprintf(buff, "iptables -D INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to remove filer nr 2\n");
 
 							//close(vnc_proxy->proxy_to_app_socket);
 							connected = 1;
