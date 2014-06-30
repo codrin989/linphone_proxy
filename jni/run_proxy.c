@@ -339,7 +339,7 @@ run_proxy(
 
 						//fds[7].fd = -1;
 						if (behavior == SERVER) {
-							/* stop listenning from VNC server */
+							/* stop reading from VNC server */
 							fds[7].revents = 0;
 							fds[7].fd = -1;
 

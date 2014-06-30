@@ -680,6 +680,7 @@ restore_tcp_queues(int sk, struct tcp_server_repair *tse, char *in_buf, char *ou
 		return -1;
 
 	len = tse->inq_len;
+	printf("Sending RECEIVE QUEUE for data of size %u\n", len);
 	if (len && send_tcp_queue(sk, TCP_RECV_QUEUE, len, in_buf))
 		return -1;
 
@@ -691,6 +692,7 @@ restore_tcp_queues(int sk, struct tcp_server_repair *tse, char *in_buf, char *ou
 	 * restored in repair mode.
 	 */
 	len = tse->outq_len - tse->unsq_len;
+	printf("Sending SEND QUEUE for unacknowledged data of size %u\n", len);
 	if (len && send_tcp_queue(sk, TCP_SEND_QUEUE, len, out_buf))
 		return -1;
 
@@ -699,6 +701,7 @@ restore_tcp_queues(int sk, struct tcp_server_repair *tse, char *in_buf, char *ou
 	 * they can be restored without any tricks.
 	 */
 	len = tse->unsq_len;
+	printf("Sending SEND QUEUE for unsent data of size %u\n", len);
 	tcp_repair_off(sk);
 	if (len && __send_tcp_queue(sk, TCP_SEND_QUEUE, len, out_buf + (tse->outq_len - tse->unsq_len)))
 		return -1;
