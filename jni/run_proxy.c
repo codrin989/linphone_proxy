@@ -889,6 +889,20 @@ __no_answer:
 	}
 
 	out:
+	if (has_drop == 1) {
+		/* remove iptables rules for RSP */
+		sprintf(buff, "iptables -D OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
+		rc = system(buff);
+		if (rc == -1)
+			perror("Failed to remove filer nr 1\n");
+
+		sprintf(buff, "iptables -D INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
+		rc = system(buff);
+		if (rc == -1)
+			perror("Failed to remove filer nr 2\n");
+		has_drop = 0;
+		memset(buff, 0, MAX_PACKET_SIZE);
+	}
 	if (tcp_proxy_to_app_client_socket != -1)
 		close(tcp_proxy_to_app_client_socket);
 	if (tcp_proxy_to_proxy_client_socket != -1)
