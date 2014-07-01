@@ -690,10 +690,10 @@ dump_one_tcp(int fd, struct inet_tcp_sk_desc *sk)
 	struct sk_opts_entry soe;
 	if (sk->state != TCP_ESTABLISHED)
 		return 0;
-
+#if 0
 	if (dump_socket_opts(fd, &soe))
 		printf("Failed to dump socket options\n");
-
+#endif
 	printf("Dumping TCP connection\n");
 
 	if (tcp_repair_established(fd, sk))
@@ -1038,8 +1038,8 @@ restore_one_tcp(int fd, struct inet_tcp_sk_desc *ii, struct sockaddr_in *rem_soc
 		perror("Failed to set reuseaddr\n");
 		return ret;
 	}
-
+#if 0
 	restore_socket_opts(fd, &soe);
-
+#endif
 	return 0;
 }

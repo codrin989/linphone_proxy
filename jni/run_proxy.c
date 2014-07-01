@@ -35,6 +35,7 @@ run_proxy(
 		char *remote_ip)
 {
 	proxy_state = NONE;
+	int has_drop = 1;
 	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", linphone_proxy->proxy_to_proxy_port, linphone_proxy->proxy_to_proxy_data_port);
 	int rc, num_fds = LISTENING_SOCKETS, i, j;
 	unsigned int udp_proxy_to_proxy_len, udp_proxy_to_linphone_len, udp_proxy_to_proxy_data_len,
@@ -300,8 +301,8 @@ run_proxy(
 				}
 				else {
 					printf("MGM: from [PROXY MANAGER: %d] - %d bytes\n\tMessage: %s\n", htons(manager_sock.sin_port), rc, buff);
-					if (behavior == SERVER)
-						getchar();
+					//if (behavior == SERVER)
+						//getchar();
 					if (strcmp (buff, "Test") == 0)
 					{
 						strcpy (buff, "Test ok");
@@ -481,6 +482,9 @@ run_proxy(
 							rc = system(buff);
 							if (rc == -1)
 								perror("Failed to add filer nr 2\n");
+							memset(buff, 0, MAX_PACKET_SIZE);
+
+							has_drop = 1;
 
 							/* send the TCP repair structure */
 							printf("Starting to dump TCP repair\n");
@@ -518,6 +522,21 @@ run_proxy(
 							struct inet_tcp_sk_desc app_sock_descr;
 							close(vnc_proxy->proxy_to_app_socket);
 
+							if (!has_drop) {
+								/* add iptables rules to dump RSP */
+								sprintf(buff, "iptables -A OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
+								rc = system(buff);
+								if (rc == -1)
+									perror("Failed to add filer nr 1\n");
+
+								sprintf(buff, "iptables -A INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
+								rc = system(buff);
+								if (rc == -1)
+									perror("Failed to add filer nr 2\n");
+								memset(buff, 0, MAX_PACKET_SIZE);
+								has_drop = 1;
+							}
+
 							memset(&tcp_proxy_to_app_sock, 0, tcp_proxy_to_app_len);
 							tcp_proxy_to_app_sock.sin_family = AF_INET;
 							tcp_proxy_to_app_sock.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -539,17 +558,6 @@ run_proxy(
 							if (restore_one_tcp(vnc_proxy->proxy_to_app_socket, &app_sock_descr, &tcp_proxy_to_app_sock, sizeof(tcp_proxy_to_app_sock))) {
 								printf("ERROR: failed to dump TCP repair state\n");
 							}
-
-							/* remove iptables rules for RSP */
-							sprintf(buff, "iptables -D OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
-							rc = system(buff);
-							if (rc == -1)
-								perror("Failed to remove filer nr 1\n");
-
-							sprintf(buff, "iptables -D INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
-							rc = system(buff);
-							if (rc == -1)
-								perror("Failed to remove filer nr 2\n");
 
 							//close(vnc_proxy->proxy_to_app_socket);
 							connected = 1;
@@ -692,6 +700,21 @@ __no_answer:
 						fds[8].events = POLLIN;
 						fds[8].revents = 0;
 						printf("A remote proxy has connected to us via TCP\n");
+
+						if (has_drop == 1) {
+							/* remove iptables rules for RSP */
+							sprintf(buff, "iptables -D OUTPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", VNC_TCP_PORT, START_PORT_NO_TCP_FORWARDING);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to remove filer nr 1\n");
+
+							sprintf(buff, "iptables -D INPUT -p tcp --dport %d --sport %d -s 127.0.0.1 -d 127.0.0.1 -j DROP", START_PORT_NO_TCP_FORWARDING, VNC_TCP_PORT);
+							rc = system(buff);
+							if (rc == -1)
+								perror("Failed to remove filer nr 2\n");
+							has_drop = 0;
+							memset(buff, 0, MAX_PACKET_SIZE);
+						}
 						if (!connected) {
 							/* time to connect to the VNC server */
 							printf("Trying to connect to the VNC server\n");
