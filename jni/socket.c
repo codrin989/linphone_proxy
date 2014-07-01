@@ -27,6 +27,7 @@ write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_bu
 {
 	int fd, rc;
 
+	printf("starting to dump\n");
 	fd = open(file, O_WRONLY | O_CREAT, 0777);
 	if (fd < 0) {
 		perror("Failed to create file for TCP repair: ");
@@ -61,7 +62,190 @@ write_repair_socket(const char *file, struct tcp_server_repair *tse, char *in_bu
 		return -1;
 	}
 
+/*
+ * struct sk_opts_entry
+{
+  uint32_t so_sndbuf;
+  uint32_t so_rcvbuf;
+  uint64_t so_snd_tmo_sec;
+  uint64_t so_snd_tmo_usec;
+  uint64_t so_rcv_tmo_sec;
+  uint64_t so_rcv_tmo_usec;
+  int has_reuseaddr;
+  int reuseaddr;
+  int has_so_priority;
+  uint32_t so_priority;
+  int has_so_rcvlowat;
+  uint32_t so_rcvlowat;
+  int has_so_mark;
+  uint32_t so_mark;
+  int has_so_passcred;
+  int so_passcred;
+  int has_so_passsec;
+  int so_passsec;
+  int has_so_dontroute;
+  int so_dontroute;
+  int has_so_no_check;
+  int so_no_check;
+  char *so_bound_dev;
+  size_t n_so_filter;
+  uint64_t *so_filter;
+ */
+#if 0
+	rc = write(fd, &soe->so_sndbuf, sizeof(soe->so_sndbuf));
+	if (rc != sizeof(soe->so_sndbuf)) {
+		perror("Failed to write so_sndbuf\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_rcvbuf, sizeof(soe->so_rcvbuf));
+	if (rc != sizeof(soe->so_rcvbuf)) {
+		perror("Failed to write so_rcvbuf\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_snd_tmo_sec, sizeof(soe->so_snd_tmo_sec));
+	if (rc != sizeof(soe->so_snd_tmo_sec)) {
+		perror("Failed to write so_snd_tmo_sec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_snd_tmo_usec, sizeof(soe->so_snd_tmo_usec));
+	if (rc != sizeof(soe->so_snd_tmo_usec)) {
+		perror("Failed to write so_snd_tmo_usec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_rcv_tmo_sec, sizeof(soe->so_rcv_tmo_sec));
+	if (rc != sizeof(soe->so_rcv_tmo_sec)) {
+		perror("Failed to write so_rcv_tmo_sec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_rcv_tmo_usec, sizeof(soe->so_rcv_tmo_usec));
+	if (rc != sizeof(soe->so_rcv_tmo_usec)) {
+		perror("Failed to write so_rcv_tmo_usec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_reuseaddr, sizeof(soe->has_reuseaddr));
+	if (rc != sizeof(soe->has_reuseaddr)) {
+		perror("Failed to write has_reuseaddr\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->reuseaddr, sizeof(soe->reuseaddr));
+	if (rc != sizeof(soe->reuseaddr)) {
+		perror("Failed to write reuseaddr\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_priority, sizeof(soe->has_so_priority));
+	if (rc != sizeof(soe->has_so_priority)) {
+		perror("Failed to write has_so_priority\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_priority, sizeof(soe->so_priority));
+	if (rc != sizeof(soe->so_priority)) {
+		perror("Failed to write so_priority\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_rcvlowat, sizeof(soe->has_so_rcvlowat));
+	if (rc != sizeof(soe->has_so_rcvlowat)) {
+		perror("Failed to write has_so_rcvlowat\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_rcvlowat, sizeof(soe->so_rcvlowat));
+	if (rc != sizeof(soe->so_rcvlowat)) {
+		perror("Failed to write so_rcvlowat\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_mark, sizeof(soe->has_so_mark));
+	if (rc != sizeof(soe->has_so_mark)) {
+		perror("Failed to write has_so_mark\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_mark, sizeof(soe->so_mark));
+	if (rc != sizeof(soe->so_mark)) {
+		perror("Failed to write so_mark\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_passcred, sizeof(soe->has_so_passcred));
+	if (rc != sizeof(soe->has_so_passcred)) {
+		perror("Failed to write has_so_passcred\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_passcred, sizeof(soe->so_passcred));
+	if (rc != sizeof(soe->so_passcred)) {
+		perror("Failed to write so_passcred\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_passsec, sizeof(soe->has_so_passsec));
+	if (rc != sizeof(soe->has_so_passsec)) {
+		perror("Failed to write has_so_passsec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_passsec, sizeof(soe->so_passsec));
+	if (rc != sizeof(soe->so_passsec)) {
+		perror("Failed to write so_passsec\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_dontroute, sizeof(soe->has_so_dontroute));
+	if (rc != sizeof(soe->has_so_dontroute)) {
+		perror("Failed to write has_so_dontroute\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_dontroute, sizeof(soe->so_dontroute));
+	if (rc != sizeof(soe->so_dontroute)) {
+		perror("Failed to write so_dontroute\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->has_so_no_check, sizeof(soe->has_so_no_check));
+	if (rc != sizeof(soe->has_so_no_check)) {
+		perror("Failed to write has_so_no_check\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->so_no_check, sizeof(soe->so_no_check));
+	if (rc != sizeof(soe->so_no_check)) {
+		perror("Failed to write so_no_check\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, soe->so_bound_dev, strlen(soe->so_bound_dev));
+	if (rc != strlen(soe->so_bound_dev)) {
+		perror("Failed to write so_bound_dev\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, &soe->n_so_filter, sizeof(soe->n_so_filter));
+	if (rc != sizeof(soe->n_so_filter)) {
+		perror("Failed to write n_so_filter\n");
+		close(fd);
+		return -1;
+	}
+	rc = write(fd, soe->so_filter, soe->n_so_filter * sizeof(uint64_t));
+	if (rc != soe->n_so_filter * sizeof(uint64_t)) {
+		perror("Failed to write so_filter\n");
+		close(fd);
+		return -1;
+	}
+
+#endif
 	close(fd);
+	printf("finished dumping\n");
 	return 0;
 }
 
@@ -129,6 +313,241 @@ read_repair_socket(const char *file, struct tcp_server_repair *tse, char **in_bu
 		close(fd);
 		return -1;
 	}
+
+
+	/*
+	 * struct sk_opts_entry
+	{
+	  uint32_t so_sndbuf;
+	  uint32_t so_rcvbuf;
+	  uint64_t so_snd_tmo_sec;
+	  uint64_t so_snd_tmo_usec;
+	  uint64_t so_rcv_tmo_sec;
+	  uint64_t so_rcv_tmo_usec;
+	  int has_reuseaddr;
+	  int reuseaddr;
+	  int has_so_priority;
+	  uint32_t so_priority;
+	  int has_so_rcvlowat;
+	  uint32_t so_rcvlowat;
+	  int has_so_mark;
+	  uint32_t so_mark;
+	  int has_so_passcred;
+	  int so_passcred;
+	  int has_so_passsec;
+	  int so_passsec;
+	  int has_so_dontroute;
+	  int so_dontroute;
+	  int has_so_no_check;
+	  int so_no_check;
+	  char *so_bound_dev;
+	  size_t n_so_filter;
+	  uint64_t *so_filter;
+	 */
+#if 0
+	rc = read(fd, &soe->so_sndbuf, sizeof(soe->so_sndbuf));
+	if (rc != sizeof(soe->so_sndbuf)) {
+		perror("Failed to read so_sndbuf\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_rcvbuf, sizeof(soe->so_rcvbuf));
+	if (rc != sizeof(soe->so_rcvbuf)) {
+		perror("Failed to read so_rcvbuf\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_snd_tmo_sec, sizeof(soe->so_snd_tmo_sec));
+	if (rc != sizeof(soe->so_snd_tmo_sec)) {
+		perror("Failed to read so_snd_tmo_sec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_snd_tmo_usec, sizeof(soe->so_snd_tmo_usec));
+	if (rc != sizeof(soe->so_snd_tmo_usec)) {
+		perror("Failed to read so_snd_tmo_usec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_rcv_tmo_sec, sizeof(soe->so_rcv_tmo_sec));
+	if (rc != sizeof(soe->so_rcv_tmo_sec)) {
+		perror("Failed to read so_rcv_tmo_sec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_rcv_tmo_usec, sizeof(soe->so_rcv_tmo_usec));
+	if (rc != sizeof(soe->so_rcv_tmo_usec)) {
+		perror("Failed to read so_rcv_tmo_usec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_reuseaddr, sizeof(soe->has_reuseaddr));
+	if (rc != sizeof(soe->has_reuseaddr)) {
+		perror("Failed to read has_reuseaddr\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->reuseaddr, sizeof(soe->reuseaddr));
+	if (rc != sizeof(soe->reuseaddr)) {
+		perror("Failed to read reuseaddr\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_priority, sizeof(soe->has_so_priority));
+	if (rc != sizeof(soe->has_so_priority)) {
+		perror("Failed to read has_so_priority\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_priority, sizeof(soe->so_priority));
+	if (rc != sizeof(soe->so_priority)) {
+		perror("Failed to read so_priority\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_rcvlowat, sizeof(soe->has_so_rcvlowat));
+	if (rc != sizeof(soe->has_so_rcvlowat)) {
+		perror("Failed to read has_so_rcvlowat\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_rcvlowat, sizeof(soe->so_rcvlowat));
+	if (rc != sizeof(soe->so_rcvlowat)) {
+		perror("Failed to read so_rcvlowat\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_mark, sizeof(soe->has_so_mark));
+	if (rc != sizeof(soe->has_so_mark)) {
+		perror("Failed to read has_so_mark\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_mark, sizeof(soe->so_mark));
+	if (rc != sizeof(soe->so_mark)) {
+		perror("Failed to read so_mark\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_passcred, sizeof(soe->has_so_passcred));
+	if (rc != sizeof(soe->has_so_passcred)) {
+		perror("Failed to read has_so_passcred\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_passcred, sizeof(soe->so_passcred));
+	if (rc != sizeof(soe->so_passcred)) {
+		perror("Failed to read so_passcred\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_passsec, sizeof(soe->has_so_passsec));
+	if (rc != sizeof(soe->has_so_passsec)) {
+		perror("Failed to read has_so_passsec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_passsec, sizeof(soe->so_passsec));
+	if (rc != sizeof(soe->so_passsec)) {
+		perror("Failed to read so_passsec\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_dontroute, sizeof(soe->has_so_dontroute));
+	if (rc != sizeof(soe->has_so_dontroute)) {
+		perror("Failed to read has_so_dontroute\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_dontroute, sizeof(soe->so_dontroute));
+	if (rc != sizeof(soe->so_dontroute)) {
+		perror("Failed to read so_dontroute\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->has_so_no_check, sizeof(soe->has_so_no_check));
+	if (rc != sizeof(soe->has_so_no_check)) {
+		perror("Failed to read has_so_no_check\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->so_no_check, sizeof(soe->so_no_check));
+	if (rc != sizeof(soe->so_no_check)) {
+		perror("Failed to read so_no_check\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, soe->so_bound_dev, strlen(soe->so_bound_dev));
+	if (rc != strlen(soe->so_bound_dev)) {
+		perror("Failed to read so_bound_dev\n");
+		free(*in_buf);
+		free(*out_buf);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, &soe->n_so_filter, sizeof(soe->n_so_filter));
+	if (rc != sizeof(soe->n_so_filter)) {
+		perror("Failed to read n_so_filter\n");
+		free(*in_buf);
+		free(*out_buf);
+		free(soe->so_bound_dev);
+		close(fd);
+		return -1;
+	}
+	rc = read(fd, soe->so_filter, soe->n_so_filter * sizeof(uint64_t));
+	if (rc != soe->n_so_filter * sizeof(uint64_t)) {
+		perror("Failed to read so_filter\n");
+		free(*in_buf);
+		free(*out_buf);
+		free(soe->so_bound_dev);
+		close(fd);
+		return -1;
+	}
+#endif
 
 	close(fd);
 	return 0;
