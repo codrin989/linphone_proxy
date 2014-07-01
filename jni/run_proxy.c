@@ -35,7 +35,7 @@ run_proxy(
 		char *remote_ip)
 {
 	proxy_state = NONE;
-	int has_drop = 1;
+	int has_drop = 0;
 	printf ("proxy_to_proxy_port %d and proxy_to_proxy_data_port %d\n", linphone_proxy->proxy_to_proxy_port, linphone_proxy->proxy_to_proxy_data_port);
 	int rc, num_fds = LISTENING_SOCKETS, i, j;
 	unsigned int udp_proxy_to_proxy_len, udp_proxy_to_linphone_len, udp_proxy_to_proxy_data_len,
