@@ -120,6 +120,7 @@ print "... " + str(dt)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind(("", MANAGER_PORT))
 
+t9 = datetime.datetime.now()
 s.sendto("Stop", local_addr)
 
 print "Waiting for message from session proxy"
@@ -137,8 +138,10 @@ print ""
 print "last CRIU incremental dump:"
 t1 = datetime.datetime.now()
 sys_cmd("criu dump --tree " + vnc_pid + " --images-dir images/4 --tcp-established --track-mem --prev-images-dir ../3")
+t11 = datetime.datetime.now()
 sys_cmd("scp -r images/4 codrin@" + trudy_ip + ":~/images > /dev/null")
 
+t12 = datetime.datetime.now()
 #"""
 s.sendto("TCP repair", remote_addr)
 #s.sendto(buffer[:n], remote_addr)
@@ -165,6 +168,14 @@ if not msg.startswith("Ack"):
 	print "wrong message"
 	sys.exit(1)
 #"""
+
+t10 = datetime.datetime.now()
+dt = t10 - t9
+
+print "Total downtime..." + str(dt)
+
+dt = t12 - t11
+print "Copied time within downtime..." + str(dt)
 
 print ""
 print "ending migration ..."
